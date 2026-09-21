@@ -60,9 +60,10 @@ Item {
             RowLayout {
                 visible:!dashboard.settingsPage && dashboard.page!=="Quota";Layout.fillWidth:true;spacing:8
                 TextLabel {text:s.range+(s.hasUsage && s.displayedMode!==s.usageMode ? "  ·  Previous "+({combined:"All devices",local:"This device",codex:"Codex"})[s.displayedMode]+" data" : "");font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
-                SoftButton{objectName:"previousPeriod";iconName:"left";tone:"ghost";compact:true;enabled:s.canPrevious;accessibleName:"Previous period";onClicked:bridge.shiftPeriod(-1)}
-                SoftButton{objectName:"nextPeriod";iconName:"right";tone:"ghost";compact:true;enabled:s.canNext;accessibleName:"Next period";onClicked:bridge.shiftPeriod(1)}
-                SoftButton{objectName:"dateSelector";text:s.period;iconName:"calendar";onClicked:dates.open()}
+                SoftButton{objectName:"previousPeriod";iconName:"left";tone:"ghost";compact:true;enabled:s.canPrevious;accessibleName:"Previous time frame";onClicked:bridge.cyclePeriod(-1)}
+                Segmented {objectName:"periodTabs";options:["Today","Week","Month","Year","All time"];selected:["Day","Week","Month","Year","All time"].indexOf(s.preset);onChosen:function(i){bridge.choosePeriod(["Day","Week","Month","Year","All time"][i])}}
+                SoftButton{objectName:"nextPeriod";iconName:"right";tone:"ghost";compact:true;enabled:s.canNext;accessibleName:"Next time frame";onClicked:bridge.cyclePeriod(1)}
+                SoftButton{objectName:"dateSelector";text:s.preset==="Custom" ? "Custom" : "";accessibleName:"Choose dates";iconName:"calendar";onClicked:dates.open()}
             }
             Loader {
                 id: content;Layout.fillWidth:true;Layout.fillHeight:true
@@ -93,7 +94,7 @@ Item {
                         ColumnLayout {anchors.fill:parent;anchors.margins:24;spacing:8;TextLabel {text:modelData.title;font.pixelSize:12;color:AppStyle.muted}Item{Layout.fillHeight:true}TextLabel {text:s.hasUsage ? modelData.value || "0" : "—";font.pixelSize:30;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.fillWidth:true}TextLabel {text:modelData.detail;font.pixelSize:11;color:AppStyle.faint;Layout.fillWidth:true}}
                     } }
                 }
-                UsageChart { Layout.fillWidth:true;Layout.preferredHeight:Math.max(218,Math.min(290,dashboard.height-600));points:s.chart }
+                UsageChart { objectName:"activityChart";Layout.fillWidth:true;Layout.preferredHeight:Math.max(256,Math.min(290,dashboard.height-600));points:s.chart;detail:s.chartDetail;emptyMessage:s.chartEmpty }
                 RowLayout {
                     Layout.fillWidth:true;spacing:18
                     Rectangle {
@@ -169,8 +170,8 @@ Item {
             }
         }
     }
-    Shortcut{sequence:"Alt+Left";onActivated:bridge.shiftPeriod(-1)}
-    Shortcut{sequence:"Alt+Right";onActivated:bridge.shiftPeriod(1)}
+    Shortcut{sequence:"Alt+Left";onActivated:bridge.cyclePeriod(-1)}
+    Shortcut{sequence:"Alt+Right";onActivated:bridge.cyclePeriod(1)}
     Shortcut{sequence:"Ctrl+R";onActivated:bridge.refresh()}
     Shortcut{sequence:"Ctrl+,";onActivated:dashboard.page="Settings"}
 }

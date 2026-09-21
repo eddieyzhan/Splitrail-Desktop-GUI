@@ -88,18 +88,12 @@ class QuotaCommandResult:
 def run_splitrail(timeout_seconds: float = 45) -> StatsCommandResult:
     executable = _find_executable("SPLITRAIL_BIN", "splitrail", SPLITRAIL_FALLBACK)
     _check_splitrail_version(executable, min(timeout_seconds, 5))
-    completed = _run((executable, "stats"), timeout_seconds, "Splitrail")
-    if len(completed.stdout.encode("utf-8")) > MAX_OUTPUT_BYTES:
-        raise LocalCommandError("Splitrail aggregate output exceeded the 50 MB safety limit")
+    from .activity import read_collector
     try:
-        dataset = parse_stats_json(completed.stdout)
-    except StatsDataError as exc:
-        detail = _safe_failure_detail(completed.stderr)
-        if completed.returncode:
-            raise LocalCommandError(f"Splitrail exited with status {completed.returncode}. {detail}") from exc
-        raise LocalCommandError(str(exc)) from exc
-
-    diagnostics = analyze_splitrail_stderr(completed.stderr)
+        dataset, exit_code, stderr = read_collector(executable, timeout_seconds)
+    except (StatsDataError, OSError, TimeoutError, subprocess.TimeoutExpired) as exc:
+        raise LocalCommandError("Splitrail usage could not load: " + str(exc)) from exc
+    diagnostics = analyze_splitrail_stderr(stderr)
     from .pricing import reprice_dataset
     dataset, resolved, unpriced = reprice_dataset(dataset)
     remaining = (set(diagnostics.unknown_models) - resolved) | unpriced
@@ -112,15 +106,15 @@ def run_splitrail(timeout_seconds: float = 45) -> StatsCommandResult:
                    for name in sorted(unpriced - set(diagnostics.unknown_models)))
     diagnostics = CostDiagnostics(tuple(sorted(remaining)), diagnostics.fallback_session_count,
                                   diagnostics.other_warning_count, lines)
-    if completed.returncode:
-        extra = f"Splitrail exited with status {completed.returncode} after producing valid aggregate JSON."
+    if exit_code:
+        extra = f"Splitrail exited with status {exit_code} after producing valid aggregate JSON."
         diagnostics = CostDiagnostics(
             diagnostics.unknown_models,
             diagnostics.fallback_session_count,
             diagnostics.other_warning_count + 1,
             (*diagnostics.lines, extra),
         )
-    return StatsCommandResult(dataset, diagnostics, completed.returncode)
+    return StatsCommandResult(dataset, diagnostics, exit_code)
 
 
 def _check_splitrail_version(executable: str, timeout_seconds: float) -> None:

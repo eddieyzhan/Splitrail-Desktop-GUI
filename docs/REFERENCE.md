@@ -4,7 +4,7 @@
 
 ## What GitHub sync transfers
 
-Each device gets a random identifier, independent of your hostname or account. It writes its own `usage/<random-id>.json` using the [GitHub Contents API](https://docs.github.com/en/rest/repos/contents). Only dates, known model/tool names, token counts, activity counts, and estimated USD costs are serialized. Unrecognized model/tool names are replaced with stable pseudonyms. No prompts, responses, paths, account/quota fields, credentials, diagnostic text, or raw session IDs are sent.
+Each device gets a random identifier, independent of your hostname or account. It writes its own `usage/<random-id>.json` using the [GitHub Contents API](https://docs.github.com/en/rest/repos/contents). Only dates, hour buckets, known model/tool names, token counts, activity counts, and estimated USD costs are serialized. Unrecognized model/tool names are replaced with stable pseudonyms. No prompts, responses, paths, account/quota fields, credentials, diagnostic text, or raw session IDs are sent.
 
 All devices can upload and download. Repeat syncs replace the same device snapshot; unchanged usage does not create another commit. The app uses the repository's default branch, verifies that it is private before transfers, and never creates workflows. Usage commits use a generic identity and `[skip ci]`. No personal Git author configuration is used by the sync transport.
 
@@ -13,6 +13,8 @@ Downloaded snapshots are validated before one atomic cache replacement. Offline 
 **Accounting boundary:** sync adds daily aggregates from distinct devices and preserves each sender's cost estimates. It cannot deduplicate copied session logs between devices because the all-tools collector does not provide request identities. Keep each device's source history distinct; do not also manually import the same usage that you sync. Manual Codex imports deduplicate against available local Codex/Pi request identities, independently of aggregate sync. Moving an entire app data directory to another computer also copies the device identity; remove `sync-device.json` and reconnect on the new computer before syncing.
 
 The explicit **Codex** dashboard includes Codex rows from remote snapshots; **All devices** includes all received tools. Deleted local logs can reduce a later device snapshot. Preserve original logs if you need complete history. The current limits are 100 device files and 8 MB per snapshot. Larger histories need manual export or a future storage backend.
+
+Hourly buckets use each source device’s local calendar date and clock hour, matching its daily totals. The built-in Codex reader also groups timestamps in local time. Repeated hours during a daylight-saving fallback are combined. Older clients and snapshots may only have daily totals; these still count in the dashboard, and missing hourly coverage is shown in Notifications. Update and refresh/sync each device to add hourly detail.
 
 ## Pricing
 
@@ -38,7 +40,7 @@ Application data is stored under:
 
 `preferences.json` stores appearance and onboarding state; `model-prices.json` stores custom rates. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
 
-The app reads `splitrail stats` without `--include-messages`. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
+The app streams `splitrail stats --include-messages` to calculate hourly activity from normalized timestamp/token/cost statistics. It retains only aggregate fields: session names, IDs, project metadata and unexpected content are discarded in memory, and the source records are never saved or synced. The collector’s daily totals remain authoritative; request-level cost precision can cause small rounding differences in hourly sums. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
 
 Manual Codex transfer is available under **Settings → Usage & data → Export / Import**. Exports contain timestamps, model/source identifiers, token counts, hashed request/session identifiers, and scan metadata. They contain no conversation content. Manual imports merge by request identity and preserve older imported records. Manual export uploads nothing.
 

@@ -21,31 +21,31 @@ Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server o
 
 ## Quick start
 
-### 1. Install Python and the UI dependency
+### 1. Install Python and dependencies
 
-You need **Python 3.11+** and **PySide6 6.8+ (Qt 6)**. Linux has been tested; Windows and macOS have platform-specific code paths but have not yet been verified on those operating systems.
+You need **Python 3.11+** and **PySide6 6.8+ (Qt 6)** plus **ijson 3.4+** for streaming usage records. Linux has been tested; Windows and macOS have platform-specific code paths but have not yet been verified on those operating systems.
 
-Create an isolated environment and install the dependency:
+Create an isolated environment and install the dependencies:
 
 **Linux / macOS:**
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install "PySide6>=6.8,<7"
+.venv/bin/python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"
 ```
 
 **Windows PowerShell:**
 
 ```powershell
 py -3 -m venv .venv
-.venv\Scripts\python -m pip install "PySide6>=6.8,<7"
+.venv\Scripts\python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"
 ```
 
 PySide6 supplies Qt; Tk is no longer required. See [Qt for Python setup](https://doc.qt.io/qtforpython-6/gettingstarted.html) if your platform needs additional libraries.
 
 ### 2. Download and launch
 
-Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz) into the same folder as your environment. It contains the application code and interface; PySide6 is installed separately above.
+Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz) into the same folder as your environment. It contains the application code and interface; the UI and streaming dependencies are installed separately above.
 
 **Linux / macOS:**
 
@@ -72,7 +72,7 @@ First launch shows only the guided setup. Choose **Get started** to connect devi
 
 The app defaults to **All devices** when it finds the collector, otherwise **Codex**. The **All devices** label does not enable network sync by itself.
 
-Use the date button above the dashboard to choose Today, Week, Month, Year or All time, or click two calendar dates for a custom range. Arrow buttons move through adjacent periods. **Models**, **Tools** and **History** offer searchable tables. Detailed token totals are under **Models**; pricing and refresh issues are in the notification bell.
+Select Today, Week, Month, Year or All time directly above the dashboard. The arrows (or Alt+Left/Right) cycle through these five presets and wrap at either end. Use the calendar button for a custom range. Today and other single-day ranges show tokens and costs by hour; longer ranges show daily or grouped trends. **Models**, **Tools** and **History** offer searchable tables. Detailed token totals are under **Models**; pricing and refresh issues are in the notification bell.
 
 ### Try it with sample data
 
@@ -101,7 +101,7 @@ Local tracking works without GitHub. To combine usage from your own computers:
 5. Open the dashboard. Choose **Settings → GitHub sync → Sync now** for a manual transfer. Under **Options**, select **All tools** (requires Splitrail) or **Codex** as this device's source.
 
 
-Only daily usage totals, estimated costs, dates and approved tool/model identifiers are synced. Prompts, responses, credentials, local paths and account/quota data are excluded. A private GitHub repository is access controlled, not end-to-end encrypted. See [Privacy](PRIVACY.md) and the [sync reference](docs/REFERENCE.md#what-github-sync-transfers).
+Only daily and hourly usage totals, estimated costs, dates and approved tool/model identifiers are synced. Prompts, responses, credentials, local paths and account/quota data are excluded. A private GitHub repository is access controlled, not end-to-end encrypted. See [Privacy](PRIVACY.md) and the [sync reference](docs/REFERENCE.md#what-github-sync-transfers).
 
 **Avoid double counting:** keep each computer's source logs separate. Aggregate sync cannot deduplicate the same logs copied to two computers. Do not manually import the same usage you already sync.
 
@@ -111,7 +111,7 @@ Only daily usage totals, estimated costs, dates and approved tool/model identifi
 
 | Problem | What to check |
 | --- | --- |
-| `No module named PySide6` | Use the environment’s Python from Quick start. Install PySide6 into that same environment. |
+| `No module named PySide6` or `ijson` | Use the environment’s Python from Quick start. Install both dependencies into that same environment. |
 | No usage appears | Select the correct source in **Settings → Usage & data** and confirm the source tool has local logs. For tools other than Codex, install Splitrail 3.9.1+ and make sure `splitrail --version` works. |
 | Collector is not found | Check PATH or set `SPLITRAIL_BIN` to its executable. The built-in Codex reader can still work without it. |
 | A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → Model pricing → Manage prices**. Tokens remain visible for unknown models. |
@@ -139,7 +139,7 @@ python -m pip install .
 splitrail-desktop
 ```
 
-The source install includes PySide6 and the QML interface resources. After activating the environment, run the tests and build the downloadable app:
+The source install includes PySide6, ijson and the QML interface resources. After activating the environment, run the tests and build the downloadable app:
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v
@@ -150,4 +150,4 @@ python3 dist/splitrail-desktop.pyz --smoke-ui
 
 The test command above uses POSIX shell syntax. UI tests use the offscreen Qt platform when no display is available. Use a real display or Xvfb for visual smoke checks. Add `--onboarding` to preview setup, or `--demo --onboarding` for an isolated preview. Tests use synthetic data and an in-memory GitHub service; they do not upload real usage. See the [source layout](docs/REFERENCE.md#source-layout).
 
-Application code is licensed under [MIT](LICENSE). [PySide6/Qt](https://doc.qt.io/qtforpython-6/licenses.html) is a separately installed dependency with its own license terms; it is not bundled in the `.pyz`. Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.
+Application code is licensed under [MIT](LICENSE). [PySide6/Qt](https://doc.qt.io/qtforpython-6/licenses.html) and [ijson](https://github.com/ICRAR/ijson) are separately installed dependencies with their own license terms; neither is bundled in the `.pyz`. Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.

@@ -15,6 +15,8 @@ Rectangle {
             model: segments.options
             delegate: Button {
                 required property string modelData; required property int index
+                objectName: segments.objectName ? segments.objectName+"-"+index : ""
+                Accessible.name: modelData
                 Layout.fillWidth: true; Layout.fillHeight: true; implicitWidth: label.implicitWidth+24
                 onClicked: segments.chosen(index)
                 background: Rectangle { radius: 8; color: segments.selected===index ? AppStyle.surface : parent.hovered ? AppStyle.hover : "transparent"; border.width: parent.activeFocus ? 1 : 0; border.color: AppStyle.accent; Behavior on color { ColorAnimation { duration: 120 } } }

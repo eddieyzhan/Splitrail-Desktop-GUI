@@ -145,6 +145,7 @@ class PricingTests(unittest.TestCase):
         self.assertEqual(resolve_rates('gemini-3.8-flash', '2027-01-01')['input'], 1.5)
 
     def test_runner_repairs_missing_model_prices_and_diagnostics(self):
+        from splitrail_desktop.domain import parse_stats_payload
         payload = {'analyzer_stats': [{'analyzer_name': 'Pi Agent', 'daily_stats': {
             '2026-09-22': {'stats': {'costCents': 0}, 'models': {'antigravity/gemini-3-8-flash': 1},
             'model_stats': {'antigravity/gemini-3-8-flash': {'inputTokens': 1_000_000, 'outputTokens': 100_000, 'cost': 0}}}}}]}
@@ -152,7 +153,9 @@ class PricingTests(unittest.TestCase):
             'Unknown model: antigravity/gemini-3-8-flash. Defaulting to $0.\nUnknown model: unrecoverable-model. Defaulting to $0.')
         with patch('splitrail_desktop.runner._find_executable', return_value='splitrail'), \
              patch('splitrail_desktop.runner._check_splitrail_version'), \
-             patch('splitrail_desktop.runner._run', return_value=completed):
+             patch('splitrail_desktop.activity.read_collector', return_value=(
+                 parse_stats_payload(payload),
+                 0, completed.stderr)):
             result = run_splitrail()
         self.assertAlmostEqual(result.dataset.days[0].cost, 1.125)
         self.assertEqual(result.cost_diagnostics.unknown_models, ('unrecoverable-model',))

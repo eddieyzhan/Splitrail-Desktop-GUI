@@ -34,6 +34,14 @@ class QmlTests(QtCase):
 
     def item(self, name):
         result = self.window.findChild(QObject, name)
+        if result is None:
+            pending = [self.window.contentItem()]
+            while pending:
+                candidate = pending.pop()
+                if candidate.objectName() == name:
+                    result = candidate
+                    break
+                pending.extend(candidate.childItems())
         self.assertIsNotNone(result, name)
         return result
 
@@ -186,3 +194,22 @@ class QmlTests(QtCase):
         self.click('savePrice')
         self.assertIn('finite number', self.controller.state['priceError'])
         self.assertEqual(load_overrides()['unknown-model']['input'], 1)
+
+    def test_visible_preset_tabs_and_arrows_switch_time_frames(self):
+        self.dashboard()
+        self.click('periodTabs-0')
+        self.assertEqual(self.controller.state['preset'], 'Day')
+        self.assertEqual(len(self.controller.state['chart']), 24)
+        self.click('previousPeriod')
+        self.assertEqual(self.controller.state['preset'], 'All time')
+        self.click('nextPeriod')
+        self.assertEqual(self.controller.state['preset'], 'Day')
+        self.click('periodTabs-2')
+        self.assertEqual(self.controller.state['preset'], 'Month')
+        for width in (960, 1280):
+            self.window.resize(width, 700)
+            QTest.qWait(30)
+            for name in ('previousPeriod', 'periodTabs-0', 'periodTabs-4', 'nextPeriod', 'dateSelector'):
+                item = self.item(name)
+                end = item.mapToScene(QPointF(item.width(), item.height()))
+                self.assertLessEqual(end.x(), width)

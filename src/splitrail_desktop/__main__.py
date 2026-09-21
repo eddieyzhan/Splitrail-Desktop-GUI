@@ -56,18 +56,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Splitrail Desktop {__version__}")
         return 0
     if args.self_check:
+        import ijson
         from PySide6.QtCore import qVersion
         from .pricing import CATALOG
         assert len(CATALOG['models']) >= 50
         print(f"Splitrail Desktop {__version__}: self-check passed (Qt {qVersion()})")
         return 0
     try:
+        import ijson  # Validate the streaming dependency before opening the GUI.
         from .qt_app import run
         return run(demo=args.demo, onboarding=args.onboarding, smoke=args.smoke_ui, codex_usage=args.codex_usage)
     except ImportError as exc:
-        if 'PySide6' not in str(exc):
+        if 'PySide6' not in str(exc) and 'ijson' not in str(exc):
             raise
-        print('Install the desktop UI with: python -m pip install "PySide6>=6.8,<7"', file=sys.stderr)
+        print('Install the desktop UI with: python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"', file=sys.stderr)
         return 1
 
 

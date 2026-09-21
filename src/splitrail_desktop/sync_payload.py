@@ -1,4 +1,4 @@
-"""Strict, content-free daily totals exchanged between devices.
+"""Strict, content-free daily and hourly totals exchanged between devices.
 
 Only explicit numeric fields are serialized. Unknown model/tool identifiers are
 pseudonymized; paths, account metadata and source records never enter the wire format.
@@ -10,7 +10,7 @@ import re
 from dataclasses import asdict, replace
 from datetime import date
 
-from .domain import DailyUsage, ModelDetail, TokenUsage, UsageDataset
+from .domain import DailyUsage, HourlyUsage, ModelDetail, TokenUsage, UsageDataset
 from .portable import digest
 from .pricing import CATALOG, model_key
 
@@ -73,6 +73,10 @@ def encode_dataset(dataset: UsageDataset, device: str, scope: str) -> dict:
                                 for m in day.model_details],
                      'model_messages': messages})
     payload = {'schema': SCHEMA, 'device': device, 'scope': scope, 'days': rows}
+    if dataset.hours:
+        payload['hours'] = [{'day': hour.day.isoformat(), 'hour': hour.hour,
+                             'tool': safe_tool(hour.analyzer), 'tokens': asdict(hour.tokens),
+                             'cost': hour.cost} for hour in dataset.hours]
     # Fail closed before sending even if a collector/model unexpectedly changes.
     decode_dataset(payload, expected_device=device)
     return payload
@@ -118,13 +122,33 @@ def decode_dataset(payload: dict, *, expected_device: str | None = None) -> Usag
     totals = {}
     for row in parsed:
         totals[row.analyzer] = totals.get(row.analyzer, 0) + row.conversations
-    return UsageDataset(tuple(parsed), totals)
+    # Optional extension: old clients and daily-only snapshots remain compatible.
+    hours = payload.get('hours', [])
+    if not isinstance(hours, list) or len(hours) > 500_000:
+        raise ValueError('Invalid hourly usage')
+    parsed_hours, seen = [], set()
+    day_keys = {(row.day, row.analyzer) for row in parsed}
+    for row in hours:
+        if not isinstance(row, dict):
+            raise ValueError('Invalid hourly row')
+        day = date.fromisoformat(row['day'])
+        hour = count(row['hour'])
+        tool = row.get('tool')
+        if hour > 23 or not isinstance(tool, str) or safe_tool(tool) != tool:
+            raise ValueError('Invalid hourly identifier')
+        key = (day, tool, hour)
+        if key in seen or (day, tool) not in day_keys:
+            raise ValueError('Duplicate or unmatched hourly usage')
+        seen.add(key)
+        parsed_hours.append(HourlyUsage(tool, day, hour, tokens(row['tokens']), cost(row['cost'])))
+    return UsageDataset(tuple(parsed), totals, hours=tuple(parsed_hours))
 
 
 def add_devices(local: UsageDataset, remote: dict[str, dict], own_id: str | None = None) -> UsageDataset:
     if not remote:
         return local
     days = list(local.days)
+    hours = list(local.hours)
     totals = dict(local.analyzer_conversation_totals)
     for device, payload in sorted(remote.items()):
         if device == own_id:
@@ -133,7 +157,9 @@ def add_devices(local: UsageDataset, remote: dict[str, dict], own_id: str | None
         for row in data.days:
             name = f'{row.analyzer} · {device[:6]}'
             days.append(replace(row, analyzer=name))
+        hours.extend(replace(row, analyzer=f'{row.analyzer} · {device[:6]}') for row in data.hours)
         for name, value in data.analyzer_conversation_totals.items():
             key = f'{name} · {device[:6]}'
             totals[key] = totals.get(key, 0) + value
-    return UsageDataset(tuple(sorted(days, key=lambda d: (d.day, d.analyzer))), totals, local.ignored_raw_messages)
+    return UsageDataset(tuple(sorted(days, key=lambda d: (d.day, d.analyzer))), totals,
+                        local.ignored_raw_messages, tuple(hours))

@@ -31,7 +31,8 @@ def add_imported_usage(dataset: UsageDataset, events: list[dict]) -> UsageDatase
     conversations = dict(dataset.analyzer_conversation_totals)
     conversations.update({f"Imported {name}": count
                           for name, count in imported.analyzer_conversation_totals.items()})
-    return UsageDataset(dataset.days + days, conversations, dataset.ignored_raw_messages)
+    hours = tuple(replace(hour, analyzer=f"Imported {hour.analyzer}") for hour in imported.hours)
+    return UsageDataset(dataset.days + days, conversations, dataset.ignored_raw_messages, dataset.hours + hours)
 
 
 def run_combined_usage(directory: Path | None = None) -> StatsCommandResult:

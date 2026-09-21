@@ -16,7 +16,7 @@ from collections import defaultdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from .domain import DailyUsage, ModelDetail, TokenUsage, UsageDataset
+from .domain import DailyUsage, HourlyUsage, ModelDetail, TokenUsage, UsageDataset
 
 SCHEMA = "splitrail-codex-usage-v1"
 PRICE_DATE = "2026-09-22"
@@ -283,8 +283,18 @@ def combined_usage(local: dict, directory: Path | None = None) -> list[dict]:
 def usage_dataset(events: list[dict]) -> UsageDataset:
     groups = defaultdict(list)
     sessions = defaultdict(set)
+    hourly = {}
     for event in events:
-        groups[(event["source"], date.fromisoformat(event["timestamp"][:10]))].append(event)
+        stamp = datetime.fromisoformat(event["timestamp"]).astimezone()
+        groups[(event["source"], stamp.date())].append(event)
+        u = event['usage']
+        tokens = TokenUsage(input=u['input_tokens']-u['cached_input_tokens'],
+                            output=u['output_tokens'], cached=u['cached_input_tokens'],
+                            reasoning=u['reasoning_output_tokens'], reasoning_in_output=u['reasoning_output_tokens'],
+                            cache_read=u['cached_input_tokens'], cache_write=u['cache_write_input_tokens'])
+        key = (event['source'], stamp.date(), stamp.hour)
+        previous = hourly.get(key, (TokenUsage(), 0.0))
+        hourly[key] = (previous[0]+tokens, previous[1]+(estimate_cost(event) or 0))
         sessions[event["source"]].add(event["session"])
     days = []
     for (source, day), items in sorted(groups.items()):
@@ -306,7 +316,10 @@ def usage_dataset(events: list[dict]) -> UsageDataset:
             tokens += detail.tokens
         days.append(DailyUsage(source, day, len({e["session"] for e in items}), 0, len(items), tokens,
                                sum(d.cost for d in details), 0, {d.name: d.messages for d in details}, tuple(details)))
-    return UsageDataset(tuple(sorted(days, key=lambda d: (d.day, d.analyzer))), {key: len(value) for key, value in sessions.items()})
+    return UsageDataset(tuple(sorted(days, key=lambda d: (d.day, d.analyzer))),
+                        {key: len(value) for key, value in sessions.items()},
+                        hours=tuple(HourlyUsage(source, day, hour, tokens, cost)
+                                    for (source, day, hour), (tokens, cost) in sorted(hourly.items())))
 
 
 def summary(payload: dict) -> dict:
@@ -348,7 +361,8 @@ def run_portable_usage():
     config = settings()
     remote = cached_devices()
     # The explicit Codex view includes only Codex rows from mixed collector snapshots.
-    remote = {key: {**value, 'days': [row for row in value['days'] if row['tool'] in ('Codex CLI', 'Codex via Pi')]}
+    remote = {key: {**value, 'days': [row for row in value['days'] if row['tool'] in ('Codex CLI', 'Codex via Pi')],
+                       'hours': [row for row in value.get('hours', []) if row['tool'] in ('Codex CLI', 'Codex via Pi')]}
               for key, value in remote.items()}
     dataset = add_devices(usage_dataset(events), remote, config['device'] if config else None)
     return StatsCommandResult(dataset, CostDiagnostics(unknown, 0, sum(local["diagnostics"].get(name, 0) for name in ("malformed_lines", "invalid_usage", "invalid_pi_lines", "invalid_counter_gaps")) + bool(sync_note and ("unavailable" in sync_note or "attention" in sync_note)), tuple(lines)), 0)

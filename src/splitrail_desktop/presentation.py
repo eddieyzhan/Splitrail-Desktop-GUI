@@ -16,6 +16,16 @@ def cycle_period_index(current: int, direction: int, period_count: int) -> int:
     return (current + direction) % period_count
 
 
+def hourly_chart_buckets(dataset: UsageDataset, day: date) -> list[ChartBucket]:
+    buckets = [ChartBucket(f'{hour:02d}:00', UsageTotal()) for hour in range(24)]
+    for row in dataset.hours:
+        if row.day == day:
+            target = buckets[row.hour].total
+            target.tokens += row.tokens
+            target.cost += row.cost
+    return buckets
+
+
 def chart_series(dataset: UsageDataset, start: date, end: date) -> list[SeriesPoint]:
     if (end - start).days < 62:
         return daily_series(dataset, start, end)
@@ -102,6 +112,8 @@ def format_percent(value: float | None, suffix: str = "") -> str:
 
 
 def format_date_range(start: date, end: date) -> str:
+    if start == end:
+        return start.strftime("%d %b %Y")
     if start.year == end.year and start.month == end.month:
         return f"{start.strftime('%d %b')} – {end.strftime('%d %b %Y')}"
     if start.year == end.year:

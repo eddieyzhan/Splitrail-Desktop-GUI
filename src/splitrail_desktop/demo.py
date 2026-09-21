@@ -1,7 +1,7 @@
 """Deterministic, synthetic data for safe screenshots and trying the interface."""
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
-from .domain import DailyUsage, ModelDetail, TokenUsage, UsageDataset
+from .domain import DailyUsage, HourlyUsage, ModelDetail, TokenUsage, UsageDataset
 from .runner import CostDiagnostics, StatsCommandResult
 from .quota import parse_quota_json
 import json
@@ -18,7 +18,17 @@ def usage() -> StatsCommandResult:
             cost = round(n * (0.26 + index * 0.12), 2)
             detail = ModelDetail(model, n*3, tokens, cost, n*2)
             rows.append(DailyUsage(tool, day, n, n*2, n*3, tokens, cost, n*2, {model: n*3}, (detail,)))
-    return StatsCommandResult(UsageDataset(tuple(rows), {}), CostDiagnostics((), 0, 0, ()), 0)
+    hours = []
+    weights = (1, 3, 5, 2, 4, 3, 1, 1)
+    for row in rows:
+        allocated = {field: 0 for field in TokenUsage.__dataclass_fields__}
+        for index, weight in enumerate(weights):
+            values = {field: (getattr(row.tokens, field)-allocated[field] if index==len(weights)-1
+                              else getattr(row.tokens, field)*weight//sum(weights)) for field in allocated}
+            for field, value in values.items():
+                allocated[field] += value
+            hours.append(HourlyUsage(row.analyzer, row.day, 7+index, TokenUsage(**values), row.cost*weight/sum(weights)))
+    return StatsCommandResult(UsageDataset(tuple(rows), {}, hours=tuple(hours)), CostDiagnostics((), 0, 0, ()), 0)
 
 
 def quota():

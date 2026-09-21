@@ -4,13 +4,13 @@ Splitrail Desktop has no telemetry, analytics, crash reporting, hosted backend, 
 
 ## Local operation
 
-The dashboard reads local usage and optional quota tools. It discards unexpected conversation content from collector responses. Source logs remain untouched. Local exports and settings stay on your computer until you choose to share them.
+The dashboard reads local usage and optional quota tools. To show hourly charts, it streams normalized per-request statistics from the collector and keeps only timestamp/token/cost aggregates. Session names, project metadata, request identities and unexpected conversation content are discarded in memory; per-request collector records are never written to disk. Source logs remain untouched. Local exports and settings stay on your computer until you choose to share them.
 
 ## Optional GitHub sync
 
 Connecting GitHub and enabling data sharing are explicit actions. GitHub CLI handles authentication; its browser flow shows a one-time code, never an access token, in the app. The app neither reads credential files nor calls `gh auth token`. GitHub CLI may use a plaintext credential fallback where an OS credential store is unavailable; consult its documentation.
 
-Sync transfers a strict allowlist: daily token and activity counts, estimated costs, dates, known tool/model identifiers, and random device identifiers. Unknown identifiers are pseudonymized. Source paths, hostnames, emails, prompts, responses, credentials, raw session IDs, account identifiers and quota data are excluded. GitHub still knows the authenticated account and receives ordinary network metadata. A private repository is access controlled, not end-to-end encrypted.
+Sync transfers a strict allowlist: daily token and activity counts, hourly token/cost buckets, estimated costs, dates, known tool/model identifiers, and random device identifiers. Unknown identifiers are pseudonymized. Source paths, hostnames, emails, prompts, responses, credentials, raw session IDs, account identifiers and quota data are excluded. GitHub still knows the authenticated account and receives ordinary network metadata. A private repository is access controlled, not end-to-end encrypted.
 
 The app verifies repository privacy before each transfer. Owners control access. Making a repository public outside the app can expose previously committed usage; never change the visibility of a usage repository. The app cannot retroactively hide data published through GitHub itself.
 

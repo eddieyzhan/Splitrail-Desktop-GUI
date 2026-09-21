@@ -149,7 +149,7 @@ class DesktopTests(QtCase):
         self.assertEqual(c.state['start'], '2026-03-01')
         c.choosePeriod('Month')
         self.assertEqual(c.state['preset'], 'Month')
-        self.assertFalse(c.state['canNext'])
+        self.assertTrue(c.state['canNext'])
 
     def test_calendar_periods_handle_leap_year_and_year_boundary(self):
         empty = UsageDataset((), {})
@@ -248,3 +248,40 @@ class DesktopTests(QtCase):
         c.tick()
         self.assertEqual(changes, [])
         self.assertEqual(ticks, [True])
+
+    def test_preset_arrows_cycle_and_wrap_in_both_directions(self):
+        c = self.controller
+        c.choosePeriod('Day')
+        for expected in ('Week', 'Month', 'Year', 'All time', 'Day'):
+            c.cyclePeriod(1)
+            self.assertEqual(c.state['preset'], expected)
+        c.cyclePeriod(-1)
+        self.assertEqual(c.state['preset'], 'All time')
+        c.chooseDates('2026-02-03', '2026-02-05')
+        c.cyclePeriod(1)
+        self.assertEqual(c.state['preset'], 'Day')
+        self.assertEqual(c.state['start'], date.today().isoformat())
+
+    def test_today_is_hourly_and_other_presets_remain_daily(self):
+        c = self.controller
+        c._accept_usage(demo.usage())
+        c.choosePeriod('Day')
+        self.assertEqual(len(c.state['chart']), 24)
+        self.assertEqual(c.state['chart'][0]['label'], '00:00')
+        self.assertEqual(c.state['chart'][-1]['label'], '23:00')
+        daily = aggregate_period(c.dataset, date.today(), date.today()).total
+        self.assertEqual(sum(p['tokens'] for p in c.state['chart']), daily.tokens.total)
+        self.assertAlmostEqual(sum(p['cost'] for p in c.state['chart']), daily.cost)
+        self.assertFalse(any(n['key']=='hourly' for n in c.state['notifications']))
+        c.choosePeriod('Month')
+        self.assertNotIn(':', c.state['chart'][0]['label'])
+
+    def test_daily_only_history_is_never_fabricated_into_hours(self):
+        c = self.controller
+        sample = demo.usage()
+        c._accept_usage(replace(sample, dataset=replace(sample.dataset, hours=())))
+        c.choosePeriod('Day')
+        self.assertTrue(c.state['summary']['exactTokens'])
+        self.assertEqual(sum(p['tokens'] for p in c.state['chart']), 0)
+        self.assertIn('isn’t available', c.state['chartEmpty'])
+        self.assertTrue(any(n['key']=='hourly' for n in c.state['notifications']))

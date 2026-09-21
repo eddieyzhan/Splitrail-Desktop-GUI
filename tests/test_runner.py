@@ -35,23 +35,15 @@ class SafeCommandRunnerTests(unittest.TestCase):
 
     @patch("splitrail_desktop.runner._find_executable", return_value="/safe/splitrail")
     @patch("splitrail_desktop.runner.subprocess.run")
-    def test_splitrail_uses_aggregate_command_without_shell_or_messages(self, run_mock, _find_mock) -> None:
-        run_mock.side_effect = [
-            subprocess.CompletedProcess([], 0, "splitrail 3.9.1\n", ""),
-            subprocess.CompletedProcess(
-                [], 0, (FIXTURES / "stats_valid.json").read_text(encoding="utf-8"),
-                "WARNING: Unknown model: future-model. Defaulting to $0.\n",
-            ),
-        ]
-
-        result = run_splitrail()
-
-        arguments = run_mock.call_args.args[0]
-        options = run_mock.call_args.kwargs
-        self.assertEqual(run_mock.call_args_list[0].args[0], ("/safe/splitrail", "--version"))
-        self.assertEqual(arguments, ("/safe/splitrail", "stats"))
-        self.assertNotIn("--include-messages", arguments)
-        self.assertFalse(options["shell"])
+    def test_splitrail_streams_statistics_then_applies_pricing(self, run_mock, _find_mock):
+        from splitrail_desktop.domain import parse_stats_json
+        run_mock.return_value = subprocess.CompletedProcess([], 0, "splitrail 3.9.1\n", "")
+        dataset = parse_stats_json((FIXTURES / "stats_valid.json").read_text())
+        with patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, "WARNING: Unknown model: future-model. Defaulting to $0.\n")) as stream:
+            result = run_splitrail()
+        self.assertEqual(run_mock.call_args.args[0], ("/safe/splitrail", "--version"))
+        self.assertFalse(run_mock.call_args.kwargs['shell'])
+        stream.assert_called_once_with('/safe/splitrail', 45)
         self.assertEqual(result.cost_diagnostics.unknown_models, ("future-model",))
 
     @patch("splitrail_desktop.runner._find_executable", return_value="/safe/quota-axi")

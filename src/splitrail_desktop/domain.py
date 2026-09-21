@@ -61,10 +61,20 @@ class DailyUsage:
 
 
 @dataclass(frozen=True)
+class HourlyUsage:
+    analyzer: str
+    day: date
+    hour: int
+    tokens: TokenUsage
+    cost: float
+
+
+@dataclass(frozen=True)
 class UsageDataset:
     days: tuple[DailyUsage, ...]
     analyzer_conversation_totals: dict[str, int]
     ignored_raw_messages: bool = False
+    hours: tuple[HourlyUsage, ...] = ()
 
     @property
     def first_day(self) -> date | None:

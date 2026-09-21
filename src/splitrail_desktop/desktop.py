@@ -14,7 +14,8 @@ from PySide6.QtWidgets import QFileDialog
 
 from . import preferences, sync
 from .domain import UsageDataset, aggregate_period, daily_data_rows, period_for_preset
-from .presentation import build_chart_buckets, chart_series, format_compact, format_currency, format_date_range
+from .presentation import (build_chart_buckets, chart_series, hourly_chart_buckets,
+                           format_compact, format_currency, format_date_range)
 from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_override
 from .quota import format_refresh_age, format_countdown, format_local_reset, preserve_banked_resets
 from .refresh import AdaptiveRefreshPolicy
@@ -85,7 +86,8 @@ class DesktopController(QObject):
             'connected': False, 'repository': '', 'automatic': False, 'receiveOnly': False,
             'syncScope': 'all' if collector else 'codex', 'syncStatus': 'Only on this device',
             'period': 'This month', 'range': '', 'start': '', 'end': '', 'preset': 'Month',
-            'canNext': False, 'canPrevious': True, 'summary': {}, 'chart': [],
+            'canNext': True, 'canPrevious': True, 'summary': {}, 'chart': [],
+            'chartDetail': '', 'chartEmpty': '',
             'models': [], 'tools': [], 'days': [], 'quota': {'available': False, 'age': ''},
             'demo': demo, 'transferBusy': False, 'settingsError': '',
         }
@@ -298,8 +300,7 @@ class DesktopController(QObject):
         elif self._offset:
             title = start.strftime('%B %Y') if self._preset == 'Month' else str(start.year) if self._preset == 'Year' else format_date_range(start, end)
         self._state.update(period=title, range=format_date_range(start, end), start=start.isoformat(), end=end.isoformat(),
-                           preset=self._preset if not self._custom_range else 'Custom', canNext=self._offset < 0 or bool(self._custom_range),
-                           canPrevious=self._preset != 'All time' or bool(self._custom_range))
+                           preset=self._preset if not self._custom_range else 'Custom', canNext=True, canPrevious=True)
         self._state['summary'] = {'cost': format_currency(total.cost), 'tokens': format_compact(total.tokens.total),
                                   'exactTokens': f'{total.tokens.total:,}', 'messages': f'{total.messages:,}',
                                   'conversations': f'{total.conversations:,}', 'toolCalls': f'{total.tool_calls:,}',
@@ -307,7 +308,20 @@ class DesktopController(QObject):
                                   'cached': f'{total.tokens.cached:,}', 'reasoning': f'{total.tokens.reasoning:,}',
                                   'read': f'{total.tokens.cache_read:,}', 'write': f'{total.tokens.cache_write:,}',
                                   'empty': aggregate.is_empty}
-        buckets = build_chart_buckets(chart_series(self.dataset, start, min(end, today))) if start <= today else []
+        self._state.update(chartDetail='', chartEmpty='')
+        self._notifications.pop('hourly', None)
+        if start == end:
+            buckets = hourly_chart_buckets(self.dataset, start)
+            self._state['chartDetail'] = 'Hourly'
+            timed_tokens = sum(bucket.total.tokens.total for bucket in buckets)
+            timed_cost = sum(bucket.total.cost for bucket in buckets)
+            if timed_tokens != total.tokens.total or abs(timed_cost-total.cost) > max(.02, total.cost*.001):
+                self._notice('hourly', 'Some usage has no hourly detail',
+                             'The chart shows timestamped usage only. Daily-only imports and older device snapshots remain in your totals. Refresh each device to add hourly detail.')
+            if not any(row.day == start for row in self.dataset.hours) and (total.tokens.total or total.cost):
+                self._state['chartEmpty'] = 'Hourly detail isn’t available for this usage'
+        else:
+            buckets = build_chart_buckets(chart_series(self.dataset, start, min(end, today))) if start <= today else []
         self._state['chart'] = [{'label': item.label, 'tokens': item.total.tokens.total, 'cost': item.total.cost} for item in buckets]
         self._state['models'] = [{'name': item.name, 'tokens': f'{item.tokens.total:,}', 'compactTokens': format_compact(item.tokens.total),
                                  'cost': format_currency(item.cost), 'amount': item.cost, 'messages': f'{item.messages:,}',
@@ -326,6 +340,13 @@ class DesktopController(QObject):
             return
         self._preset, self._offset, self._custom_range = preset, 0, None
         self._render()
+
+    @Slot(int)
+    def cyclePeriod(self, direction):
+        if direction not in (-1, 1):
+            return
+        periods = ('Day', 'Week', 'Month', 'Year', 'All time')
+        self.choosePeriod(periods[(periods.index(self._preset) + direction) % len(periods)])
 
     @Slot(int)
     def shiftPeriod(self, direction):
