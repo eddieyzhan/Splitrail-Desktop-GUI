@@ -1,131 +1,136 @@
-# Splitrail Desktop
+# Splitrail Desktop — AI token usage and cost tracker
 
-A native desktop dashboard for AI token usage and estimated costs, with optional private GitHub sync across your devices. Built with Python and Tk. No web server, telemetry, or Python package dependencies.
+**Track token usage and estimated costs for Codex CLI, Claude Code, Gemini CLI and other AI coding tools in one desktop dashboard.** See daily trends and model breakdowns, customize model prices and optionally combine usage from multiple computers through your own private GitHub repository.
 
-![Pearl theme with synthetic demo data](docs/pearl.png)
+The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-- Track usage from Claude, Codex, Gemini, Grok and other tools through the [Splitrail collector](https://github.com/Piebald-AI/splitrail).
-- Use the built-in Codex reader without installing Splitrail.
-- Explore daily trends, models and dates. Optional Codex quota monitoring stays local.
-- Look up 59 built-in model prices or add your own in **Settings → General → Manage model prices**.
-- Choose **Pearl**, a light theme with rounded controls, or **Nord**, a soft dark theme.
-- Connect your own GitHub account and private repository from **Settings → GitHub sync**.
+[Download the app](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz) · [Quick start](#quick-start) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
 
-## Get started
+![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
-Requires **Python 3.11 or later with Tk 8.6+**. Linux is tested. Windows and macOS are supported by the code paths, but have not yet been tested on those operating systems.
+## What you can track
 
-Download `splitrail-desktop.pyz` from this repository's **Releases**, then run:
+| What you want | What you need |
+| --- | --- |
+| Codex CLI token usage and cost estimates | The desktop app and existing local Codex logs. No Splitrail collector required. Codex-authenticated Pi logs are also supported. |
+| Claude Code, Gemini CLI and other supported tools | [Splitrail 3.9.1 or newer](https://github.com/Piebald-AI/splitrail#installation), available on your PATH. Supported sources depend on the collector. |
+| Combined usage across computers | Optional GitHub CLI sign-in and a private repository you control. Each device chooses **All tools** or **Codex only** as its source. |
+| Codex quota display | Optional `quota-axi`; missing quota tools do not block token tracking or sync. [Quota details](docs/REFERENCE.md#optional-quota-monitoring). |
 
-```bash
+Built with Python and Tk: no web server, telemetry or third-party Python package dependencies. **Costs are estimates, not provider bills or subscription charges.** The bundled price catalogue is an offline snapshot, and you can override rates locally.
+
+## Quick start
+
+### 1. Install Python with Tk
+
+You need **Python 3.11+ and Tk 8.6+**. Linux has been tested; Windows and macOS have platform-specific code paths but have not yet been verified on those operating systems.
+
+| Platform | Setup |
+| --- | --- |
+| Ubuntu / Debian | Install Python 3.11+ and `python3-tk` (`sudo apt install python3-tk`). |
+| Fedora | Install Python 3.11+ and `python3-tkinter` (`sudo dnf install python3-tkinter`). |
+| Windows | Install Python 3.11+ from [python.org](https://www.python.org/downloads/), including Tcl/Tk and the Python launcher. |
+| macOS | Use a Python 3.11+ distribution that includes Tk, such as the [python.org installer](https://www.python.org/downloads/macos/). |
+
+### 2. Download and launch
+
+Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz). It is a single-file Python application; there is no `pip install` step. Open a terminal in the folder where you saved it.
+
+**Linux / macOS:**
+
+```sh
 python3 splitrail-desktop.pyz
 ```
 
-On Windows use `python` (or `pythonw` without a console). The official Python installer includes Tk. On Ubuntu/Debian, install `python3-tk`; on Fedora, `python3-tkinter`. On macOS, use a Python distribution that includes Tk.
+**Windows PowerShell:**
 
-To run from a downloaded/cloned source checkout:
-
-```bash
-python3 splitrail-desktop
+```powershell
+py -3 splitrail-desktop.pyz
 ```
 
-The first launch offers **Use on this device** or **Connect GitHub**. You can connect later. When the Splitrail executable is available, the dashboard opens in **All devices**; otherwise it opens in **Codex only**. Install [Splitrail 3.9.1 or later](https://github.com/Piebald-AI/splitrail/releases) for all supported local tools. Choose a view from **Usage**.
+Release notes and checksums are on the [release page](https://github.com/eddieyzhan/splitrail-desktop/releases/latest).
 
-Try the interface without reading any accounts or usage logs:
+### 3. Choose your usage view
 
-```bash
-python3 splitrail-desktop --demo
+Select **Use on this device** at first launch. You can connect GitHub later.
+
+- For Codex, choose **Usage → Codex only**. The app reads existing local usage logs.
+- For multiple AI coding tools, install the [Splitrail collector](https://github.com/Piebald-AI/splitrail#installation), then choose **Usage → This device** or **All devices**.
+- Use **Settings → General → Manage model prices** to inspect or override rates.
+- Change between the light **Pearl** and dark **Nord** themes in Settings.
+
+The app defaults to **All devices** when it finds the collector, otherwise **Codex only**. The **All devices** label does not enable network sync by itself.
+
+### Try it with sample data
+
+```sh
+python3 splitrail-desktop.pyz --demo
 ```
 
-Demo data is synthetic, and demo mode cannot connect or sync.
+On Windows use `py -3` in place of `python3`. Demo mode uses synthetic data, does not read usage logs and cannot connect or sync.
 
 <details>
-<summary>Nord theme and first-run setup</summary>
+<summary>See the dark theme and first-run screen</summary>
 
-![Nord theme with synthetic data](docs/nord.png)
-![First-run welcome](docs/welcome.png)
+![Nord dark theme with synthetic AI usage data](docs/nord.png)
+![First-run setup offering local use or optional GitHub connection](docs/welcome.png)
 
 </details>
 
-## Connect devices with GitHub
+## Sync usage between computers (optional)
 
-1. Install [GitHub CLI](https://cli.github.com/) on each device.
-2. Open **Settings → GitHub sync**. Choose **Sign in with browser** and enter the displayed one-time code on GitHub. If you already use GitHub CLI, choose **Check connection**.
-3. On the first device, choose **Create private repository** and enter a name, such as `splitrail-usage`. On additional devices, choose **Use existing repository** and enter the same `owner/repository`.
-4. Choose **All tools** (requires Splitrail) or **Codex only** as this device's source. Review the data-sharing description, check **Allow usage totals and estimated costs to sync**, and choose **Connect**.
-5. Choose **Sync now**. Use **Sync** in the dashboard whenever you want to update. Enable **Sync automatically when usage refreshes** if desired; it is off by default.
+Local tracking works without GitHub. To combine usage from your own computers:
 
-You can select **Download only on this device**. Disconnecting disables sync and removes downloaded totals from that device; it leaves local source logs, the GitHub CLI sign-in, and your private repository intact. To erase cloud history, delete the private data repository through GitHub. Never make it public: usage dates and costs are still personal data.
+1. Install [GitHub CLI](https://cli.github.com/) on each computer.
+2. Open **Settings → GitHub sync**. Choose **Sign in with browser**, or **Check connection** if GitHub CLI is already signed in.
+3. On the first computer, choose **Create private repository**. On each additional computer, choose **Use existing repository** and enter the same `owner/repository`.
+4. Choose **All tools** (requires the collector) or **Codex only**. Review and enable **Allow usage totals and estimated costs to sync**, then click **Connect**.
+5. Click **Sync now**, then use **Usage → All devices** or **Codex only** to view combined totals. Automatic sync is off by default; enable **Sync automatically when usage refreshes** if wanted.
 
-Sign-in uses the [GitHub CLI browser flow](https://cli.github.com/manual/gh_auth_login). Splitrail never asks you to paste a token or stores one itself. GitHub CLI manages credentials, using the OS credential store where available. Authentication and networking run in background threads.
+Only daily usage totals, estimated costs, dates and approved tool/model identifiers are synced. Prompts, responses, credentials, local paths and account/quota data are excluded. A private GitHub repository is access controlled, not end-to-end encrypted. See [Privacy](PRIVACY.md) and the [sync reference](docs/REFERENCE.md#what-github-sync-transfers).
 
-### What sync transfers
+**Avoid double counting:** keep each computer's source logs separate. Aggregate sync cannot deduplicate the same logs copied to two computers. Do not manually import the same usage you already sync.
 
-Each device gets a random identifier, independent of your hostname or account. It writes its own `usage/<random-id>.json` using the [GitHub Contents API](https://docs.github.com/en/rest/repos/contents). Only dates, known model/tool names, token counts, activity counts, and estimated USD costs are serialized. Unrecognized model/tool names are replaced with stable pseudonyms. No prompts, responses, paths, account/quota fields, credentials, diagnostic text, or raw session IDs are sent.
+**Download only on this device** lets a computer view remote totals without uploading its own. Disconnecting stops sync and removes downloaded totals locally; it does not delete local logs or your private repository. Automatic refresh and sync require the app to remain open.
 
-All devices can upload and download. Repeat syncs replace the same device snapshot; unchanged usage does not create another commit. The app uses the repository's default branch, verifies that it is private before transfers, and never creates workflows. Usage commits use a generic identity and `[skip ci]`. No personal Git author configuration is used by the sync transport.
+## Troubleshooting
 
-Downloaded snapshots are validated before one atomic cache replacement. Offline or malformed responses preserve the last good totals. Removing a device file from the private repository removes its contribution after the next successful sync.
-
-**Accounting boundary:** sync adds daily aggregates from distinct devices and preserves each sender's cost estimates. It cannot deduplicate copied session logs between devices because the all-tools collector does not provide request identities. Keep each device's source history distinct; do not also manually import the same usage that you sync. Manual Codex imports deduplicate against available local Codex/Pi request identities, independently of aggregate sync. Moving an entire app data directory to another computer also copies the device identity; remove `sync-device.json` and reconnect on the new computer before syncing.
-
-The explicit **Codex only** dashboard includes Codex rows from remote snapshots; **All devices** includes all received tools. Deleted local logs can reduce a later device snapshot. Preserve original logs if you need complete history. The current limits are 100 device files and 8 MB per snapshot. Larger histories need manual export or a future storage backend.
-
-## Pricing
-
-Built-in rates cover common OpenAI/Codex, Anthropic/Claude, Google/Gemini and xAI/Grok models. `model_prices.json` includes provider source links and a verification date. The catalogue is an offline snapshot, not a live pricing feed. Check the provider's current rates before relying on an estimate.
-
-Prices are USD per million tokens. Custom rates override matching models locally; `0` means free, and unused cache fields can stay blank. Existing nonzero collector estimates are preserved unless overridden. Missing costs are filled from the catalogue. Gemini aliases are normalized, cache tokens are charged once, and reasoning already included in output is not charged again.
-
-Unknown models keep their tokens and appear in **Notifications**, with a shortcut to pricing settings. Daily aggregate fallbacks cannot infer request-level long-context premiums, media, paid tools, cache duration, service tiers, or subscription invoices. Synced costs retain the sender's estimate; another device's local price overrides do not rewrite them. Custom rate configuration itself stays local.
-
-## Optional quota monitoring
-
-If `quota-axi` is on your PATH, the app runs `quota-axi --provider codex --full --json` for quota display. If `codex` is available, a read-only app-server query can supply banked-reset information. These tools manage their own authentication. Missing quota tools do not block usage or sync. The app never consumes reset credits or uploads account/quota data.
-
-## Local data and controls
-
-Application data is stored under:
-
-| System | Directory |
+| Problem | What to check |
 | --- | --- |
-| Linux | `${XDG_DATA_HOME:-~/.local/share}/splitrail-desktop` |
-| Windows | `%LOCALAPPDATA%/splitrail-desktop` |
-| macOS | `~/Library/Application Support/splitrail-desktop` |
+| `No module named tkinter` | Install the Tk package for the Python interpreter you use to launch the app. See the platform table above. |
+| No usage appears | Select the correct **Usage** view and confirm the source tool has local logs. For tools other than Codex, install Splitrail 3.9.1+ and make sure `splitrail --version` works. |
+| Collector is not found | Check PATH or set `SPLITRAIL_BIN` to its executable. The built-in Codex reader can still work without it. |
+| A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → General → Manage model prices**. Tokens remain visible for unknown models. |
+| An estimate differs from your bill | Estimates depend on saved usage and configured prices. They cannot reconstruct subscription charges, all service tiers or every billing surcharge. [Pricing details](docs/REFERENCE.md#pricing). |
+| GitHub sync fails | Use **Check connection**, confirm repository access and ensure the repository is private. The last successfully downloaded totals are retained after a failed sync. |
+| Codex quotas are unavailable | Quota monitoring uses optional tools with their own authentication. It is separate from usage tracking. [Setup details](docs/REFERENCE.md#optional-quota-monitoring). |
 
-`preferences.json` stores appearance and onboarding state; `model-prices.json` stores custom rates. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
+For bug reports, include your OS, Python version, app version and the error message. Do not attach raw session logs, credentials or real-account screenshots. See [Privacy](PRIVACY.md).
 
-The app reads `splitrail stats` without `--include-messages`. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
+## More controls
 
-Manual Codex transfer is available under **Usage → Export usage / Import usage**. Exports contain timestamps, model/source identifiers, token counts, hashed request/session identifiers, and scan metadata. They contain no conversation content. Manual imports merge by request identity and preserve older imported records. Manual export uploads nothing.
+- **Manual Codex export/import:** use **Usage → Export usage / Import usage**, without GitHub. [Export format and deduplication](docs/REFERENCE.md#local-data-and-controls).
+- **Custom model prices:** local rate overrides and details about cached/reasoning tokens. [Pricing reference](docs/REFERENCE.md#pricing).
+- **CLI commands:** export, import, configure sync and sync once from a terminal. [Command-line reference](docs/REFERENCE.md#command-line).
+- **Data locations and refresh behavior:** settings files, log discovery, privacy boundaries and device limits. [Reference guide](docs/REFERENCE.md).
 
-Normal refresh starts after launch and repeats every 15 minutes, switching to 5 minutes while usage changes. Automatic GitHub sync runs on these usage refreshes only when explicitly enabled and viewing **All devices** or **Codex only**. The app must remain open. “Updated … ago” reports the quota source's refresh age.
+## Run from source or contribute
 
-Executable discovery uses PATH and standard per-user install locations. Optional overrides: `SPLITRAIL_BIN`, `QUOTA_AXI_BIN`, `CODEX_BIN`.
-
-## Command line
-
-```bash
-python3 splitrail-desktop --codex-usage
-python3 splitrail-desktop --export-usage usage.json.gz
-python3 splitrail-desktop --import-usage usage.json.gz
-python3 splitrail-desktop --setup-sync OWNER/REPO --sync-codex-only
-python3 splitrail-desktop --sync-usage
+```sh
+git clone https://github.com/eddieyzhan/splitrail-desktop.git
+cd splitrail-desktop
+python3 splitrail-desktop
 ```
 
-CLI setup expects an existing private repository and GitHub CLI sign-in. Add `--receive-only` or `--auto-sync` to opt into those options. GUI setup can create the repository for you.
+No third-party Python packages are required. To run the tests and build the downloadable app:
 
-## Development
-
-```bash
+```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 python3 scripts/build.py
 python3 dist/splitrail-desktop.pyz --self-check
 python3 dist/splitrail-desktop.pyz --smoke-ui
 ```
 
-A display or Xvfb is needed for GUI checks. Tests use synthetic fixtures and an in-memory GitHub service to exercise multiple devices, privacy enforcement, retries, costs, and cache replacement. Tests never upload real usage. Browser authentication still needs a real GitHub account for a live end-to-end check.
+The test command above uses POSIX shell syntax. GUI checks need a display or Xvfb. Tests use synthetic data and an in-memory GitHub service; they do not upload real usage. See the [source layout](docs/REFERENCE.md#source-layout).
 
-Core modules: `domain.py` aggregates usage, `pricing.py` resolves rates, `portable.py` handles Codex logs, `sync_payload.py` defines the narrow wire format, `sync.py` handles private GitHub transport, and `onboarding.py` provides setup and settings.
-
-This repository begins with a clean source-only history. No runtime data, private configuration, original Git history, or real-account screenshots are distributed. See [PRIVACY.md](PRIVACY.md). Licensed under [MIT](LICENSE). This is an independent interface for Splitrail; it is not affiliated with AI model providers or GitHub.
+Licensed under [MIT](LICENSE). Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.
