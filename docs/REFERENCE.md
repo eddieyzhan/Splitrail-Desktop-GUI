@@ -12,7 +12,7 @@ Downloaded snapshots are validated before one atomic cache replacement. Offline 
 
 **Accounting boundary:** sync adds daily aggregates from distinct devices and preserves each sender's cost estimates. It cannot deduplicate copied session logs between devices because the all-tools collector does not provide request identities. Keep each device's source history distinct; do not also manually import the same usage that you sync. Manual Codex imports deduplicate against available local Codex/Pi request identities, independently of aggregate sync. Moving an entire app data directory to another computer also copies the device identity; remove `sync-device.json` and reconnect on the new computer before syncing.
 
-The explicit **Codex only** dashboard includes Codex rows from remote snapshots; **All devices** includes all received tools. Deleted local logs can reduce a later device snapshot. Preserve original logs if you need complete history. The current limits are 100 device files and 8 MB per snapshot. Larger histories need manual export or a future storage backend.
+The explicit **Codex** dashboard includes Codex rows from remote snapshots; **All devices** includes all received tools. Deleted local logs can reduce a later device snapshot. Preserve original logs if you need complete history. The current limits are 100 device files and 8 MB per snapshot. Larger histories need manual export or a future storage backend.
 
 ## Pricing
 
@@ -40,9 +40,9 @@ Application data is stored under:
 
 The app reads `splitrail stats` without `--include-messages`. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
 
-Manual Codex transfer is available under **Usage → Export usage / Import usage**. Exports contain timestamps, model/source identifiers, token counts, hashed request/session identifiers, and scan metadata. They contain no conversation content. Manual imports merge by request identity and preserve older imported records. Manual export uploads nothing.
+Manual Codex transfer is available under **Settings → Usage & data → Export / Import**. Exports contain timestamps, model/source identifiers, token counts, hashed request/session identifiers, and scan metadata. They contain no conversation content. Manual imports merge by request identity and preserve older imported records. Manual export uploads nothing.
 
-Normal refresh starts after launch and repeats every 15 minutes, switching to 5 minutes while usage changes. Automatic GitHub sync runs on these usage refreshes only when explicitly enabled and viewing **All devices** or **Codex only**. The app must remain open. “Updated … ago” reports the quota source's refresh age.
+Normal refresh starts after launch and repeats every 15 minutes, switching to 5 minutes while usage changes. Automatic GitHub sync runs on these usage refreshes only when explicitly enabled and viewing **All devices** or **Codex**. The app must remain open. The header shows time since the last successful usage refresh; quota cards show the quota source’s refresh age. Stale quota values are marked as last known.
 
 Executable discovery uses PATH and standard per-user install locations. Optional overrides: `SPLITRAIL_BIN`, `QUOTA_AXI_BIN`, `CODEX_BIN`.
 
@@ -62,4 +62,4 @@ CLI setup expects an existing private repository and GitHub CLI sign-in. Add `--
 
 ## Source layout
 
-Core modules: `domain.py` aggregates usage, `pricing.py` resolves rates, `portable.py` handles Codex logs, `sync_payload.py` defines the wire format, `sync.py` handles private GitHub transport, and `onboarding.py` provides setup and settings.
+Core modules: `domain.py` aggregates usage, `pricing.py` resolves rates, `portable.py` handles Codex logs, `sync_payload.py` defines the wire format, `sync.py` handles private GitHub transport, and `desktop.py` bridges the engines to Qt, and `qml/` contains the dashboard, staged onboarding and reusable controls. `qt_app.py` loads resources from source, wheel or zipapp.

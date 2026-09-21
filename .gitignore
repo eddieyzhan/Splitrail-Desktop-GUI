@@ -23,3 +23,6 @@ model-prices.json
 *.jsonl
 *.sqlite*
 *.db
+
+.venv/
+*.egg-info/

@@ -8,6 +8,7 @@ from . import __version__
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Splitrail desktop usage explorer")
+    parser.add_argument("--onboarding", action="store_true", help="Open the guided setup")
     parser.add_argument("--demo", action="store_true", help="Try the interface with synthetic data; no account or usage access")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
@@ -55,45 +56,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Splitrail Desktop {__version__}")
         return 0
     if args.self_check:
-        import tkinter
-
-        from .domain import calendar_week
-        from .quota import format_countdown
+        from PySide6.QtCore import qVersion
         from .pricing import CATALOG
-
-        assert len(CATALOG["models"]) >= 50
-
-        assert tkinter.TkVersion >= 8.6
-        assert callable(calendar_week)
-        assert callable(format_countdown)
-        print(f"Splitrail Desktop {__version__}: self-check passed")
+        assert len(CATALOG['models']) >= 50
+        print(f"Splitrail Desktop {__version__}: self-check passed (Qt {qVersion()})")
         return 0
-
-    from .app import SplitrailApp
-
-    if args.demo:
-        import tempfile
-        from pathlib import Path
-        from unittest.mock import patch
-        from . import demo
-        with tempfile.TemporaryDirectory() as temporary, \
-             patch('splitrail_desktop.portable.data_dir', return_value=Path(temporary)), \
-             patch('splitrail_desktop.sync.data_dir', return_value=Path(temporary)):
-            app = SplitrailApp(auto_refresh=False)
-            app._demo_mode = True
-            app._loading_usage_mode = app._usage_mode
-            app._finish_usage(demo.usage(), None)
-            from .runner import QuotaCommandResult
-            app._finish_quota(QuotaCommandResult(demo.quota(), 0), None)
-            app.title('Splitrail Desktop · Demo')
-            app.mainloop()
-        return 0
-
-    app = SplitrailApp(auto_refresh=not args.smoke_ui, codex_usage=args.codex_usage)
-    if args.smoke_ui:
-        app.after(350, app.destroy)
-    app.mainloop()
-    return 0
+    try:
+        from .qt_app import run
+        return run(demo=args.demo, onboarding=args.onboarding, smoke=args.smoke_ui, codex_usage=args.codex_usage)
+    except ImportError as exc:
+        if 'PySide6' not in str(exc):
+            raise
+        print('Install the desktop UI with: python -m pip install "PySide6>=6.8,<7"', file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

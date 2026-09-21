@@ -17,6 +17,9 @@ def main() -> int:
     entries = {path.relative_to(SOURCE).as_posix(): path.read_bytes()
                for path in (SOURCE / 'splitrail_desktop').glob('*.py')}
     entries['splitrail_desktop/model_prices.json'] = (SOURCE / 'splitrail_desktop/model_prices.json').read_bytes()
+    entries.update({path.relative_to(SOURCE).as_posix(): path.read_bytes()
+                    for path in (SOURCE / 'splitrail_desktop/qml').iterdir()
+                    if path.is_file() and (path.suffix == '.qml' or path.name == 'qmldir')})
     entries['LICENSE'] = (ROOT / 'LICENSE').read_bytes()
     entries['__main__.py'] = b'from splitrail_desktop.__main__ import main\nraise SystemExit(main())\n'
     buffer = io.BytesIO()
