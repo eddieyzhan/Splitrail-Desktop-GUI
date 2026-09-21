@@ -1,0 +1,17 @@
+{
+  "id": 2,
+  "result": {
+    "rateLimitResetCredits": {
+      "availableCount": 1,
+      "credits": [
+        {
+          "id": "synthetic-reset-1",
+          "resetType": "codexRateLimits",
+          "status": "available",
+          "grantedAt": 1787357949,
+          "expiresAt": "not-a-unix-timestamp"
+        }
+      ]
+    }
+  }
+}

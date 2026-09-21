@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-08-19T13:40:43.582Z",
+  "schemaVersion": 5,
+  "providers": [
+    {
+      "provider": "codex",
+      "label": "Codex",
+      "source": "oauth",
+      "plan": "example-plan",
+      "account": {
+        "email": "fixture@example.invalid",
+        "accountId": "fictional-account",
+        "identityStatus": "verified"
+      },
+      "windows": [
+        {
+          "id": "weekly-base",
+          "kind": "weekly",
+          "label": "week",
+          "percentUsed": 6,
+          "percentRemaining": 94,
+          "resetsAt": "2026-08-21T05:28:29.000Z",
+          "windowSeconds": 604800
+        },
+        {
+          "id": "model-example",
+          "kind": "model",
+          "label": "Example model week",
+          "percentUsed": 20,
+          "percentRemaining": 80,
+          "resetsAt": "2026-08-26T13:40:44.000Z",
+          "windowSeconds": 604800
+        }
+      ],
+      "credits": {"remaining": 42, "unit": "credits", "unlimited": false},
+      "state": {
+        "status": "fresh",
+        "stale": false,
+        "refreshedAt": "2026-08-19T13:40:43.582Z",
+        "sourcesTried": ["oauth"]
+      },
+      "attempts": [{"source": "oauth", "status": "success", "credentialPresent": true}]
+    }
+  ]
+}

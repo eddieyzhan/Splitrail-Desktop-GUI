@@ -1,0 +1,13 @@
+[project]
+name = "splitrail-desktop"
+version = "1.0.0"
+description = "Private desktop usage dashboard with optional multi-device GitHub sync"
+requires-python = ">=3.11"
+dependencies = []
+license = "MIT"
+
+[project.scripts]
+splitrail-desktop = "splitrail_desktop.__main__:main"
+
+[tool.pyright]
+pythonVersion = "3.11"

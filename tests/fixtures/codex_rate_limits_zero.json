@@ -1,0 +1,10 @@
+{
+  "id": 2,
+  "result": {
+    "rateLimits": null,
+    "rateLimitsByLimitId": {},
+    "rateLimitResetCredits": {"availableCount": 0, "credits": []},
+    "accountId": null,
+    "rateLimitUpsell": null
+  }
+}

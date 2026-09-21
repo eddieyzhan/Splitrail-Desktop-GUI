@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-08-19T13:40:43Z",
+  "schemaVersion": 5,
+  "providers": [
+    {
+      "provider": "codex",
+      "windows": [],
+      "state": {"status": "auth_required", "stale": false, "reason": "credentials_expired"}
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": 2,
+  "result": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "primary": {"usedPercent": 12, "windowDurationMins": 300, "resetsAt": 1788761744},
+      "secondary": null,
+      "credits": {"hasCredits": false, "unlimited": false, "balance": "0"},
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "fixture-plan",
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {},
+    "rateLimitResetCredits": {
+      "availableCount": 1,
+      "credits": [
+        {
+          "id": "synthetic-reset-1",
+          "resetType": "codexRateLimits",
+          "status": "available",
+          "grantedAt": 1787357949,
+          "expiresAt": 1789949949,
+          "title": "Synthetic reset",
+          "description": "Synthetic fixture; not an account record"
+        }
+      ]
+    },
+    "accountId": "synthetic-account",
+    "rateLimitUpsell": null
+  }
+}

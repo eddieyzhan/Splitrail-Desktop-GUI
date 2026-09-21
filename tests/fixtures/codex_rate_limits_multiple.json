@@ -1,0 +1,37 @@
+{
+  "id": 2,
+  "result": {
+    "rateLimitResetCredits": {
+      "availableCount": 3,
+      "credits": [
+        {
+          "id": "synthetic-reset-1",
+          "resetType": "codexRateLimits",
+          "status": "available",
+          "grantedAt": 1787357949,
+          "expiresAt": 1789949949,
+          "title": null,
+          "description": null
+        },
+        {
+          "id": "synthetic-reset-2",
+          "resetType": "codexRateLimits",
+          "status": "available",
+          "grantedAt": 1787444349,
+          "expiresAt": 1790036349,
+          "title": null,
+          "description": null
+        },
+        {
+          "id": "synthetic-reset-3",
+          "resetType": "codexRateLimits",
+          "status": "available",
+          "grantedAt": 1787530749,
+          "expiresAt": 1790122749,
+          "title": null,
+          "description": null
+        }
+      ]
+    }
+  }
+}
