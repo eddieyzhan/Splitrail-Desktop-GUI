@@ -1,4 +1,4 @@
-# Splitrail Desktop reference
+# Splitrail Desktop GUI Reference
 
 [Back to the quick start](../README.md) · [Privacy](../PRIVACY.md)
 

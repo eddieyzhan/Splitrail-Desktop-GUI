@@ -1,10 +1,10 @@
-# Splitrail Desktop — AI token usage and cost tracker
+# Splitrail Desktop GUI
 
 **Track token usage and estimated costs for Codex CLI, Claude Code, Gemini CLI and other AI coding tools in one desktop dashboard.** See daily trends and model breakdowns, customize model prices and optionally combine usage from multiple computers through your own private GitHub repository.
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download the app](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz) · [Quick start](#quick-start) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
+[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz) · [Quick start](#quick-start) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -45,7 +45,7 @@ PySide6 supplies Qt; Tk is no longer required. See [Qt for Python setup](https:/
 
 ### 2. Download and launch
 
-Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/splitrail-desktop/releases/latest/download/splitrail-desktop.pyz) into the same folder as your environment. It contains the application code and interface; the UI and streaming dependencies are installed separately above.
+Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz) into the same folder as your environment. It contains the application code and interface; the UI and streaming dependencies are installed separately above.
 
 **Linux / macOS:**
 
@@ -59,7 +59,7 @@ Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/splitrail-des
 .venv\Scripts\python splitrail-desktop.pyz
 ```
 
-Release notes and checksums are on the [release page](https://github.com/eddieyzhan/splitrail-desktop/releases/latest).
+Release notes and checksums are on the [release page](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest).
 
 ### 3. Choose your usage view
 
@@ -131,8 +131,8 @@ For bug reports, include your OS, Python version, app version and the error mess
 ## Run from source or contribute
 
 ```sh
-git clone https://github.com/eddieyzhan/splitrail-desktop.git
-cd splitrail-desktop
+git clone https://github.com/eddieyzhan/Splitrail-Desktop-GUI.git
+cd Splitrail-Desktop-GUI
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install .
