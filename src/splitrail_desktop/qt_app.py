@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 
 def run(*, demo=False, onboarding=False, smoke=False, codex_usage=False) -> int:
+    from .platform_support import prepare_qt
+    prepare_qt()
     from PySide6.QtCore import QTimer, QUrl
     from PySide6.QtGui import QFont, QFontDatabase
     from PySide6.QtWidgets import QApplication

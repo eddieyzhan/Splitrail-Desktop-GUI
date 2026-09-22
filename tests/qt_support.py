@@ -6,8 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-if not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
+import sys
+
+if sys.platform.startswith('linux') and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+from splitrail_desktop.platform_support import prepare_qt
+prepare_qt()
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQuickControls2 import QQuickStyle

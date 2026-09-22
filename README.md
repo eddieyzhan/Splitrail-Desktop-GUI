@@ -4,7 +4,7 @@
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz) · [Quick start](#quick-start) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
+[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -21,47 +21,19 @@ Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server o
 
 ## Quick start
 
-### 1. Install Python and dependencies
+### 1. Download and open
 
-You need **Python 3.11+** and **PySide6 6.8+ (Qt 6)** plus **ijson 3.4+** for streaming usage records. Linux has been tested; Windows and macOS have platform-specific code paths but have not yet been verified on those operating systems.
+Choose your platform on the [latest release](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest). Native downloads include Python and dependencies.
 
-Create an isolated environment and install the dependencies:
+| Platform | Download | Open |
+| --- | --- | --- |
+| Windows 10/11, Intel/AMD 64-bit | `splitrail-desktop-windows-x86_64.zip` | **Extract All**, open the `Splitrail` folder, double-click `Splitrail.exe`. |
+| macOS 14+, Apple silicon | `splitrail-desktop-macos-arm64.zip` | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
+| Linux, Intel/AMD 64-bit | `splitrail-desktop-linux-x86_64.tar.gz` | Extract, then run `./Splitrail/Splitrail`. Ubuntu 22.04+ or compatible. |
 
-**Linux / macOS:**
+Keep the extracted folder together. These community builds are unsigned and the Mac app is not notarized; the [install guide](docs/INSTALL.md) explains first-open prompts, checksums and Linux libraries. It also provides exact **Python installation commands for all three operating systems** using the small [source-only `.pyz`](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz), including an Intel Mac option.
 
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"
-```
-
-**Windows PowerShell:**
-
-```powershell
-py -3 -m venv .venv
-.venv\Scripts\python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"
-```
-
-PySide6 supplies Qt; Tk is no longer required. See [Qt for Python setup](https://doc.qt.io/qtforpython-6/gettingstarted.html) if your platform needs additional libraries.
-
-### 2. Download and launch
-
-Download [**splitrail-desktop.pyz**](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz) into the same folder as your environment. It contains the application code and interface; the UI and streaming dependencies are installed separately above.
-
-**Linux / macOS:**
-
-```sh
-.venv/bin/python splitrail-desktop.pyz
-```
-
-**Windows PowerShell:**
-
-```powershell
-.venv\Scripts\python splitrail-desktop.pyz
-```
-
-Release notes and checksums are on the [release page](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest).
-
-### 3. Choose your usage view
+### 2. Choose your usage view
 
 First launch shows only the guided setup. Choose **Get started** to connect devices, or **Use on this device** to go straight to the dashboard. GitHub is optional and can be connected later in Settings.
 
@@ -77,10 +49,10 @@ Select Today, Week, Month, Year or All time directly above the dashboard. The ar
 ### Try it with sample data
 
 ```sh
-.venv/bin/python splitrail-desktop.pyz --demo
+./Splitrail/Splitrail --demo
 ```
 
-On Windows use `.venv\Scripts\python` in place of `.venv/bin/python`. Demo mode uses synthetic data, does not read usage logs and cannot connect or sync.
+On Windows run `.\Splitrail\Splitrail.exe --demo`; on macOS run `/Applications/Splitrail.app/Contents/MacOS/Splitrail --demo`. For the Python download, add `--demo` to your usual launch command. Demo mode uses synthetic data, does not read usage logs and cannot connect or sync.
 
 <details>
 <summary>See the dark theme and first-run screen</summary>
@@ -111,7 +83,8 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 
 | Problem | What to check |
 | --- | --- |
-| `No module named PySide6` or `ijson` | Use the environment’s Python from Quick start. Install both dependencies into that same environment. |
+| `No module named PySide6` or `ijson` | Use a native download, or follow the [Python install instructions](docs/INSTALL.md#python-download-all-three-operating-systems) with the same environment for installation and launch. |
+| Qt plugin or DLL fails to load on Windows | Update to 1.1.2 or newer, which registers Qt's DLL directory before loading QML. Extract the entire native ZIP; do not move just the executable. |
 | No usage appears | Select the correct source in **Settings → Usage & data** and confirm the source tool has local logs. For tools other than Codex, install Splitrail 3.9.1+ and make sure `splitrail --version` works. |
 | Collector is not found | Check PATH or set `SPLITRAIL_BIN` to its executable. The built-in Codex reader can still work without it. |
 | A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → Model pricing → Manage prices**. Tokens remain visible for unknown models. |
@@ -135,7 +108,7 @@ git clone https://github.com/eddieyzhan/Splitrail-Desktop-GUI.git
 cd Splitrail-Desktop-GUI
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install .
+python -m pip install '.[test]'
 splitrail-desktop
 ```
 
@@ -148,6 +121,8 @@ python3 dist/splitrail-desktop.pyz --self-check
 python3 dist/splitrail-desktop.pyz --smoke-ui
 ```
 
-The test command above uses POSIX shell syntax. UI tests use the offscreen Qt platform when no display is available. Use a real display or Xvfb for visual smoke checks. Add `--onboarding` to preview setup, or `--demo --onboarding` for an isolated preview. Tests use synthetic data and an in-memory GitHub service; they do not upload real usage. See the [source layout](docs/REFERENCE.md#source-layout).
+On Windows PowerShell use `$env:PYTHONPATH='src'; python -m unittest discover -s tests -v`. The test extra supplies timezone data for Windows. UI tests use the native display on Windows/macOS and the offscreen Qt platform on headless Linux. Use a real display or Xvfb for visual smoke checks. Add `--onboarding` to preview setup, or `--demo --onboarding` for an isolated preview. Tests use synthetic data and an in-memory GitHub service; they do not upload real usage. See the [source layout](docs/REFERENCE.md#source-layout).
 
-Application code is licensed under [MIT](LICENSE). [PySide6/Qt](https://doc.qt.io/qtforpython-6/licenses.html) and [ijson](https://github.com/ICRAR/ijson) are separately installed dependencies with their own license terms; neither is bundled in the `.pyz`. Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.
+To build a native archive on the target OS, install `scripts/requirements-release.txt`, then run `python scripts/build_native.py`. It bundles allowlisted application resources and the required Qt Quick modules, then tests both packaged screens using synthetic data before creating an archive. `codemagic.yaml` provides a **manual-only** macOS check with a 15-minute timeout; it has no automatic triggers or publishing secrets. Use a single run for a release after local checks pass.
+
+Application code is licensed under [MIT](LICENSE). Native downloads include Python, PySide6/Qt and ijson with [third-party notices](docs/THIRD_PARTY.md); the `.pyz` contains only application code and resources. Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.

@@ -1,0 +1,28 @@
+workflows:
+  macos-release-check:
+    name: macOS minimal release check
+    instance_type: mac_mini_m2
+    max_build_duration: 15
+    # Manual only: no push/tag/PR triggers and no publishing credentials.
+    environment:
+      xcode: 26.6
+    scripts:
+      - name: Install isolated release dependencies
+        script: |
+          set -eu
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -r scripts/requirements-release.txt
+      - name: Run synthetic tests and verify the zipapp
+        script: |
+          set -eu
+          PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
+          .venv/bin/python scripts/build.py
+          .venv/bin/python dist/splitrail-desktop.pyz --self-check
+          .venv/bin/python dist/splitrail-desktop.pyz --smoke-ui
+          .venv/bin/python dist/splitrail-desktop.pyz --smoke-ui --onboarding
+      - name: Build and smoke-test the Mac app
+        script: |
+          set -eu
+          .venv/bin/python scripts/build_native.py
+    artifacts:
+      - dist/splitrail-desktop-macos-arm64.zip

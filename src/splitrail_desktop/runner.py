@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from .domain import StatsDataError, UsageDataset, parse_stats_json
+from .platform_support import command_options
 from .quota import (
     BankedResetStatus,
     QuotaDataError,
@@ -189,6 +190,7 @@ def _run_codex_reset_credit_read(executable: str, timeout_seconds: float) -> dic
             encoding="utf-8",
             errors="replace",
             env={**os.environ, "NO_COLOR": "1", "TERM": "dumb"},
+            **command_options(),
         )
     except FileNotFoundError as exc:
         raise MissingCommandError("Codex executable was not found") from exc
@@ -356,6 +358,7 @@ def _run(arguments: tuple[str, ...], timeout_seconds: float, label: str) -> subp
             errors="replace",
             timeout=timeout_seconds,
             check=False,
+            **command_options(),
         )
     except FileNotFoundError as exc:
         raise MissingCommandError(f"{label} executable was not found") from exc

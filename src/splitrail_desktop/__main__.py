@@ -7,6 +7,8 @@ from . import __version__
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .platform_support import prepare_desktop_path
+    prepare_desktop_path()
     parser = argparse.ArgumentParser(description="Splitrail desktop usage explorer")
     parser.add_argument("--onboarding", action="store_true", help="Open the guided setup")
     parser.add_argument("--demo", action="store_true", help="Try the interface with synthetic data; no account or usage access")

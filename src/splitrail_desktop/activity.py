@@ -16,6 +16,7 @@ from ijson.common import ObjectBuilder
 from .domain import (DailyUsage, HourlyUsage, ModelDetail, StatsDataError,
                      TokenUsage, UsageDataset, _integer, _number, parse_stats_payload)
 from .pricing import load_overrides, reprice_dataset
+from .platform_support import command_options
 
 MAX_STREAM_BYTES = 512 * 1024 * 1024
 STAT_FIELDS = {'inputTokens', 'outputTokens', 'reasoningTokens', 'cachedTokens',
@@ -134,7 +135,7 @@ def read_collector(executable: str, timeout: float):
     """Drain both pipes, enforce a deadline, and never write records to disk."""
     process = subprocess.Popen((executable, 'stats', '--include-messages'),
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, shell=False)
+                               stderr=subprocess.PIPE, shell=False, **command_options())
     expired = threading.Event()
     diagnostics = bytearray()
     def drain():

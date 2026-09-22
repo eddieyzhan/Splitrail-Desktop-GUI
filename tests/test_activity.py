@@ -7,7 +7,8 @@ import time
 import unittest
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,7 +22,15 @@ from splitrail_desktop.sync_payload import encode_dataset, decode_dataset, add_d
 @contextmanager
 def local_zone(zone):
     if not hasattr(time, 'tzset'):
-        raise unittest.SkipTest('POSIX timezone test')
+        # Windows has no tzset. Exercise the same real ZoneInfo conversions
+        # without changing the machine's timezone or skipping parser tests.
+        class LocalDateTime(datetime):
+            def astimezone(self, tz=None):
+                return super().astimezone(tz if tz is not None else ZoneInfo(zone))
+        with patch('splitrail_desktop.activity.datetime', LocalDateTime), \
+             patch('splitrail_desktop.portable.datetime', LocalDateTime):
+            yield
+        return
     try:
         with patch.dict(os.environ, {'TZ': zone}):
             time.tzset()
