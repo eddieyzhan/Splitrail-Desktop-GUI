@@ -6,11 +6,22 @@ import platform
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from importlib.metadata import distribution
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def public_tar_metadata(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Do not publish the build user's name, IDs, or local file timestamps."""
+    info.uid = info.gid = 0
+    info.uname = info.gname = ''
+    info.mtime = 1767225600  # 2026-01-01, also used by the source archive.
+    info.pax_headers = {}
+    info.mode = 0o755 if info.isdir() or info.mode & 0o111 else 0o644
+    return info
 
 
 def main() -> int:
@@ -54,8 +65,11 @@ def main() -> int:
         # ditto preserves bundle symlinks, executable bits and extended attributes.
         subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', str(staging),
                         str(basename.with_suffix('.zip'))], check=True)
+    elif sys.platform == 'win32':
+        shutil.make_archive(str(basename), 'zip', staging)
     else:
-        shutil.make_archive(str(basename), 'zip' if sys.platform == 'win32' else 'gztar', staging)
+        with tarfile.open(str(basename) + '.tar.gz', 'w:gz') as archive:
+            archive.add(staging, arcname='.', filter=public_tar_metadata)
     print(f'Native {platform_name}/{arch} release built and smoke-tested.')
     temporary.cleanup()
     return 0
