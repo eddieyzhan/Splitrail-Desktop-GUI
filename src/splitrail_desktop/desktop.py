@@ -23,6 +23,14 @@ from .refresh import AdaptiveRefreshPolicy
 from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
 
 
+def quota_timestamp_parts(value: datetime | None) -> dict[str, str]:
+    if value is None:
+        return {'date': 'Time unavailable', 'time': ''}
+    local = value.astimezone()
+    return {'date': local.strftime('%a %d %b %Y').replace(' 0', ' '),
+            'time': local.strftime('%I:%M %p %Z').lstrip('0')}
+
+
 def shifted_range(preset: str, offset: int, today: date, dataset: UsageDataset) -> tuple[date, date]:
     if preset == 'Day':
         day = today + timedelta(days=offset)
@@ -278,20 +286,26 @@ class DesktopController(QObject):
             expiries = [format_local_reset(stamp) if stamp else 'Does not expire' for stamp in banks.expiries]
             expiry_details = [f'Reset {index}: {"Does not expire" if stamp is None else "Expires " + shown}'
                               for index, (stamp, shown) in enumerate(zip(banks.expiries, expiries), start=1)]
+            expiry_notice = ''
             if banks.count and not banks.expiry_details_complete:
-                expiry_details.append(f'Expiry details: {len(expiries)} of {banks.count} provided by Codex'
-                                      if expiries else 'Expiry times not provided by Codex')
+                expiry_notice = (f'Expiry details: {len(expiries)} of {banks.count} provided by Codex'
+                                 if expiries else 'Expiry times not provided by Codex')
+                expiry_details.append(expiry_notice)
             self._state['quota'] = {
                 'available': window is not None and window.percent_used is not None,
                 'used': window.percent_used if window and window.percent_used is not None else 0,
                 'remaining': f'{window.percent_remaining:g}%' if window and window.percent_remaining is not None else '—',
                 'reset': format_local_reset(window.resets_at) if window else '',
+                'resetParts': quota_timestamp_parts(window.resets_at if window else None),
                 'countdown': format_countdown(window.resets_at) if window else '',
                 'age': format_refresh_age(snapshot.refreshed_at or snapshot.generated_at),
                 'stale': snapshot.stale or 'quota' in self._notifications,
                 'banks': snapshot.banked_resets.count if snapshot.banked_resets.count is not None else -1,
                 'expiries': expiries,
                 'bankExpiryDetails': '\n'.join(expiry_details),
+                'bankExpiryRows': [quota_timestamp_parts(stamp) if stamp else {'date': 'Does not expire', 'time': ''}
+                                   for stamp in banks.expiries],
+                'bankExpiryNotice': expiry_notice,
                 'banksStale': is_banked_reset_status_stale(banks),
                 'banksAge': format_refresh_age(banks.observed_at),
                 'windows': [{'name': item.label, 'used': f'{item.percent_used:g}%' if item.percent_used is not None else '—',
