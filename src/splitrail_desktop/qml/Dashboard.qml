@@ -98,82 +98,59 @@ Item {
                     Layout.fillWidth:true;spacing:18
                     Rectangle {
                         objectName:"overviewQuotaCard"
-                        Layout.fillWidth:true;Layout.fillHeight:true;Layout.preferredWidth:440;Layout.minimumWidth:420;Layout.preferredHeight:Math.max(278,quotaOverviewContent.implicitHeight+48);radius:20;color:AppStyle.surface
+                        Layout.fillWidth:true;Layout.fillHeight:true;Layout.preferredWidth:440;Layout.minimumWidth:420;Layout.preferredHeight:Math.max(196,quotaOverviewContent.implicitHeight+48);radius:20;color:AppStyle.surface
                         ColumnLayout {
                             id:quotaOverviewContent;anchors.fill:parent;anchors.margins:24;spacing:16
+                            RowLayout {
+                                Layout.fillWidth:true;spacing:10
+                                TextLabel {text:"Weekly quota"+(q.stale ? " · cached" : "");font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}
+                                TextLabel {text:q.available ? Math.round(q.used)+"% used" : "Unavailable";font.pixelSize:15;font.weight:Font.Medium;color:AppStyle.muted}
+                                SoftButton{iconName:"right";tone:"ghost";implicitWidth:24;implicitHeight:24;accessibleName:"Quota details";onClicked:dashboard.page="Quota"}
+                            }
+                            Rectangle {
+                                objectName:"overviewQuotaBar"
+                                Layout.fillWidth:true;height:10;radius:5;color:AppStyle.fill
+                                Rectangle{width:parent.width*Math.min(100,q.used || 0)/100;height:parent.height;radius:5;color:AppStyle.teal}
+                            }
                             RowLayout {
                                 Layout.fillWidth:true;Layout.fillHeight:true;spacing:24
                                 ColumnLayout {
                                     objectName:"overviewWeeklyColumn"
-                                    Layout.fillWidth:true;Layout.preferredWidth:1;Layout.alignment:Qt.AlignTop;spacing:12
-                                    TextLabel {text:"Weekly quota";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}
-                                    RowLayout {
-                                        spacing:7;Layout.fillWidth:true
-                                        TextLabel {text:q.available ? Math.round(q.used)+"%" : "—";font.pixelSize:34;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.alignment:Qt.AlignBaseline}
-                                        TextLabel {text:q.available ? "used" : "Not connected";font.pixelSize:12;color:AppStyle.muted;Layout.alignment:Qt.AlignBaseline;Layout.fillWidth:true}
-                                    }
-                                    ColumnLayout {
-                                        Layout.fillWidth:true;spacing:8
-                                        Rectangle{Layout.fillWidth:true;height:5;radius:3;color:AppStyle.fill;Rectangle{width:parent.width*Math.min(100,q.used || 0)/100;height:5;radius:3;color:AppStyle.teal}}
-                                        TextLabel {text:q.available ? q.remaining+" remaining" : "Optional Codex account limits";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                    }
-                                    ColumnLayout {
-                                        Layout.fillWidth:true;Layout.topMargin:4;spacing:5
-                                        TextLabel {text:"Next reset";font.pixelSize:11;color:AppStyle.muted}
-                                        TextLabel {objectName:"overviewResetTime";text:q.resetParts ? q.resetParts.date : "Time unavailable";font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                        TextLabel {text:q.resetParts ? q.resetParts.time : "";visible:text!=="";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                        TextLabel {objectName:"overviewResetCountdown";visible:!!q.countdown;text:q.countdown || "";font.pixelSize:11;color:AppStyle.teal;Layout.fillWidth:true;Layout.topMargin:3}
-                                    }
+                                    Layout.fillWidth:true;Layout.preferredWidth:1;Layout.alignment:Qt.AlignTop;spacing:8
+                                    TextLabel {text:"Next reset";font.pixelSize:12;color:AppStyle.muted}
+                                    TextLabel {objectName:"overviewResetTime";text:q.resetParts ? q.resetParts.date+(q.resetParts.time ? ", "+q.resetParts.time : "") : "Unavailable";font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
                                 }
-                                Rectangle {Layout.preferredWidth:1;Layout.fillHeight:true;color:AppStyle.line}
                                 ColumnLayout {
                                     objectName:"overviewBankedColumn"
-                                    Layout.fillWidth:true;Layout.preferredWidth:1;Layout.alignment:Qt.AlignTop;spacing:12
-                                    TextLabel {text:"Banked resets";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}
-                                    RowLayout {
-                                        spacing:7;Layout.fillWidth:true
-                                        TextLabel {objectName:"overviewBankedResets";text:q.banks>=0 ? q.banks : "—";font.pixelSize:34;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.alignment:Qt.AlignBaseline;Accessible.name:q.banks>=0 ? q.banks+" banked resets available" : "Banked resets unavailable"}
-                                        TextLabel {text:q.banks>=0 ? "available" : "Unavailable";font.pixelSize:12;color:AppStyle.muted;Layout.alignment:Qt.AlignBaseline;Layout.fillWidth:true}
-                                    }
+                                    Layout.fillWidth:true;Layout.preferredWidth:1;Layout.alignment:Qt.AlignTop;spacing:8
+                                    TextLabel {objectName:"overviewBankedResets";text:(q.banks>=0 ? q.banks+" banked" : "Banked resets · —")+(q.banksStale ? " · cached" : "");font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true;horizontalAlignment:Text.AlignRight;Accessible.name:q.banks>=0 ? q.banks+" banked resets available; expiry times below" : "Banked resets unavailable"}
                                     ColumnLayout {
-                                        objectName:"overviewBankedExpiry";Layout.fillWidth:true;spacing:10
-                                        TextLabel {visible:!!q.bankExpiryRows && q.bankExpiryRows.length>0;text:"Expires";font.pixelSize:11;color:AppStyle.muted}
+                                        objectName:"overviewBankedExpiry";Layout.fillWidth:true;spacing:6
                                         Repeater {
                                             model:q.bankExpiryRows || []
-                                            delegate:RowLayout {
-                                                required property var modelData;required property int index
-                                                Layout.fillWidth:true;spacing:9
-                                                Rectangle {
-                                                    Layout.preferredWidth:20;Layout.preferredHeight:20;Layout.alignment:Qt.AlignTop;radius:6;color:AppStyle.fill
-                                                    TextLabel {anchors.centerIn:parent;text:index+1;font.pixelSize:10;color:AppStyle.muted}
-                                                }
-                                                ColumnLayout {
-                                                    Layout.fillWidth:true;spacing:3
-                                                    TextLabel {text:modelData.date;font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                                    TextLabel {text:modelData.time;visible:text!=="";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                                }
+                                            delegate:TextLabel {
+                                                required property var modelData
+                                                text:modelData.date+(modelData.time ? ", "+modelData.time : "")
+                                                font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;horizontalAlignment:Text.AlignRight;wrapMode:Text.WordWrap;elide:Text.ElideNone
+                                                Accessible.name:modelData.time ? "Expires "+text : text
                                             }
                                         }
-                                        TextLabel {visible:!!q.bankExpiryNotice;text:q.bankExpiryNotice || "";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                        TextLabel {visible:q.banks===0;text:"No banked resets to expire.";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                                        TextLabel {visible:!!q.banksStale;text:"Last known · "+(q.banksAge || "Refresh time unknown");font.pixelSize:10;color:AppStyle.faint;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                                        TextLabel {visible:!!q.bankExpiryNotice;text:q.bankExpiryRows && q.bankExpiryRows.length>0 ? "Some expiries unavailable" : "Expiry unavailable";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;horizontalAlignment:Text.AlignRight;wrapMode:Text.WordWrap;elide:Text.ElideNone}
                                     }
                                 }
                             }
-                            RowLayout{Layout.fillWidth:true;TextLabel {text:(q.stale ? "Last known · " : "")+(q.age || "");font.pixelSize:10;color:AppStyle.faint;Layout.fillWidth:true}SoftButton{text:"Details";iconName:"right";tone:"ghost";compact:true;accessibleName:"Quota details";onClicked:dashboard.page="Quota"}}
                         }
                     }
                     Rectangle {
                         objectName:"overviewModelsCard"
                         Layout.fillWidth:true;Layout.fillHeight:true;Layout.preferredWidth:220;Layout.minimumWidth:220;Layout.preferredHeight:modelsOverviewContent.implicitHeight+48;radius:20;color:AppStyle.surface
-                        ColumnLayout {id:modelsOverviewContent;anchors.fill:parent;anchors.margins:24;spacing:20
-                            TextLabel {text:"Top models";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}
-                            ColumnLayout {Layout.fillWidth:true;Layout.topMargin:6;spacing:20
+                        ColumnLayout {id:modelsOverviewContent;anchors.fill:parent;anchors.margins:24;spacing:16
+                            RowLayout {Layout.fillWidth:true;TextLabel {text:"Top models";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}SoftButton{iconName:"right";implicitWidth:24;implicitHeight:24;tone:"ghost";accessibleName:"View all models";onClicked:dashboard.page="Models"}}
+                            ColumnLayout {Layout.fillWidth:true;spacing:16
                                 Repeater {model:s.models.slice(0,3);delegate:RowLayout{required property var modelData;required property int index;Layout.fillWidth:true;spacing:10;Rectangle{width:6;height:6;radius:3;color:[AppStyle.accent,AppStyle.teal,AppStyle.purple][index]}TextLabel {text:modelData.name;Layout.fillWidth:true;font.pixelSize:12}TextLabel {text:modelData.cost;font.pixelSize:12;font.weight:Font.Medium}}}
                             }
                             TextLabel {visible:s.models.length===0;text:"Models will appear as you use your tools.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
                             Item{Layout.fillHeight:true}
-                            SoftButton{text:"View all models";iconName:"right";compact:true;tone:"ghost";Layout.alignment:Qt.AlignRight;onClicked:dashboard.page="Models"}
                         }
                     }
                 }

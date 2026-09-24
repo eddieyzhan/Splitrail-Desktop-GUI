@@ -27,8 +27,9 @@ def quota_timestamp_parts(value: datetime | None) -> dict[str, str]:
     if value is None:
         return {'date': 'Time unavailable', 'time': ''}
     local = value.astimezone()
-    return {'date': local.strftime('%a %d %b %Y').replace(' 0', ' '),
-            'time': local.strftime('%I:%M %p %Z').lstrip('0')}
+    date_format = '%d %b' if local.year == datetime.now().year else '%d %b %Y'
+    return {'date': local.strftime(date_format).lstrip('0'),
+            'time': local.strftime('%I:%M %p').lstrip('0')}
 
 
 def shifted_range(preset: str, offset: int, today: date, dataset: UsageDataset) -> tuple[date, date]:
