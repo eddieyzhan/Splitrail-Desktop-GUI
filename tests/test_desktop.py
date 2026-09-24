@@ -9,12 +9,34 @@ from splitrail_desktop.desktop import shifted_range
 from splitrail_desktop.domain import aggregate_period, UsageDataset
 from splitrail_desktop.pricing import load_overrides
 from splitrail_desktop.refresh import NORMAL_REFRESH_SECONDS
+from splitrail_desktop.quota import BankedResetStatus, format_local_reset
 from splitrail_desktop.runner import CostDiagnostics, StatsCommandResult
 from test_combined import collector_fixture, event
 from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def test_banked_expiry_display_distinguishes_missing_nonexpiring_and_stale(self):
+        now = datetime.now(timezone.utc)
+        expiry = now + timedelta(days=5)
+        banks = BankedResetStatus('fresh', count=3, expiries=(expiry, None), observed_at=now)
+        self.controller.quota_snapshot = replace(demo.quota(), banked_resets=banks)
+        self.controller.tick()
+        quota = self.controller.clock['quota']
+        self.assertEqual(quota['bankExpiryDetails'],
+                         f'Reset 1: Expires {format_local_reset(expiry)}\n'
+                         'Reset 2: Does not expire\nExpiry details: 2 of 3 provided by Codex')
+        self.assertFalse(quota['banksStale'])
+        self.controller.quota_snapshot = replace(demo.quota(), banked_resets=replace(
+            banks, status='stale', expiries=()))
+        self.controller.tick()
+        self.assertTrue(self.controller.clock['quota']['banksStale'])
+        self.assertEqual(self.controller.clock['quota']['bankExpiryDetails'], 'Expiry times not provided by Codex')
+        self.controller.quota_snapshot = replace(demo.quota(), banked_resets=replace(
+            banks, count=0, expiries=(), expiry_details_complete=True))
+        self.controller.tick()
+        self.assertEqual(self.controller.clock['quota']['bankExpiryDetails'], '')
+
     def test_local_onboarding_never_contacts_github(self):
         c = self.controller
         self.assertTrue(c.state['onboarding'])

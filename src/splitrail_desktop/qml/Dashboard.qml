@@ -94,21 +94,11 @@ Item {
                         ColumnLayout {anchors.fill:parent;anchors.margins:24;spacing:8;TextLabel {text:modelData.title;font.pixelSize:12;color:AppStyle.muted}Item{Layout.fillHeight:true}TextLabel {text:s.hasUsage ? modelData.value || "0" : "—";font.pixelSize:30;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.fillWidth:true}TextLabel {text:modelData.detail;font.pixelSize:11;color:AppStyle.faint;Layout.fillWidth:true}}
                     } }
                 }
-                UsageChart { objectName:"activityChart";Layout.fillWidth:true;Layout.preferredHeight:Math.max(256,Math.min(290,dashboard.height-600));points:s.chart;detail:s.chartDetail;emptyMessage:s.chartEmpty }
                 RowLayout {
                     Layout.fillWidth:true;spacing:18
                     Rectangle {
-                        Layout.fillWidth:true;Layout.fillHeight:true;Layout.preferredWidth:3;Layout.preferredHeight:196;radius:20;color:AppStyle.surface
-                        ColumnLayout {anchors.fill:parent;anchors.margins:20;spacing:12
-                            RowLayout{Layout.fillWidth:true;TextLabel {text:"Top models";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}SoftButton{text:"View all";iconName:"right";compact:true;tone:"ghost";onClicked:dashboard.page="Models"}}
-                            Repeater {model:s.models.slice(0,3);delegate:RowLayout{required property var modelData;required property int index;Layout.fillWidth:true;spacing:12;Rectangle{width:7;height:7;radius:4;color:[AppStyle.accent,AppStyle.teal,AppStyle.purple][index]}TextLabel {text:modelData.name;Layout.fillWidth:true;font.pixelSize:12}TextLabel {text:modelData.cost;font.pixelSize:12;font.weight:Font.Medium}}}
-                            TextLabel {visible:s.models.length===0;text:"Models will appear as you use your tools.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
-                            Item{Layout.fillHeight:true}
-                        }
-                    }
-                    Rectangle {
                         objectName:"overviewQuotaCard"
-                        Layout.fillWidth:true;Layout.preferredWidth:2;Layout.preferredHeight:Math.max(196,quotaOverviewContent.implicitHeight+40);radius:20;color:AppStyle.surface
+                        Layout.fillWidth:true;Layout.preferredWidth:3;Layout.preferredHeight:Math.max(196,quotaOverviewContent.implicitHeight+40);radius:20;color:AppStyle.surface
                         ColumnLayout {id:quotaOverviewContent;anchors.fill:parent;anchors.margins:20;spacing:10
                             RowLayout{Layout.fillWidth:true;TextLabel {text:"Weekly quota";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}Icon{name:"quota";color:AppStyle.muted;width:17;height:17}}
                             TextLabel {text:q.available ? Math.round(q.used)+"% used" : "Not connected";font.pixelSize:26;font.weight:Font.DemiBold;font.letterSpacing:-.8;Layout.fillWidth:true}
@@ -116,12 +106,26 @@ Item {
                             TextLabel {text:q.available ? q.remaining+" remaining" : "Optional Codex account limits";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true}
                             TextLabel {objectName:"overviewResetTime";text:q.reset ? "Resets "+q.reset : "Reset time unavailable";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
                             TextLabel {objectName:"overviewResetCountdown";visible:!!q.countdown;text:q.countdown || "";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true}
+                            Rectangle{Layout.fillWidth:true;height:1;color:AppStyle.line;Layout.topMargin:4;Layout.bottomMargin:4}
                             TextLabel {objectName:"overviewBankedResets";text:q.banks>=0 ? q.banks+" banked reset"+(q.banks===1 ? "" : "s")+" available" : "Banked resets unavailable";font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                            TextLabel {objectName:"overviewBankedExpiry";visible:!!q.bankExpiryDetails;text:q.bankExpiryDetails || "";font.pixelSize:11;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                            TextLabel {visible:!!q.banksStale;text:"Last known banked resets · "+(q.banksAge || "Refresh time unknown");font.pixelSize:10;color:AppStyle.faint;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
                             Item{Layout.fillHeight:true}
                             RowLayout{Layout.fillWidth:true;TextLabel {text:(q.stale ? "Last known · " : "")+(q.age || "");font.pixelSize:10;color:AppStyle.faint;Layout.fillWidth:true}SoftButton{iconName:"right";tone:"ghost";compact:true;accessibleName:"Quota details";onClicked:dashboard.page="Quota"}}
                         }
                     }
+                    Rectangle {
+                        objectName:"overviewModelsCard"
+                        Layout.fillWidth:true;Layout.alignment:Qt.AlignTop;Layout.preferredWidth:2;Layout.preferredHeight:196;radius:20;color:AppStyle.surface
+                        ColumnLayout {anchors.fill:parent;anchors.margins:20;spacing:12
+                            RowLayout{Layout.fillWidth:true;TextLabel {text:"Top models";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}SoftButton{text:"View all";iconName:"right";compact:true;tone:"ghost";onClicked:dashboard.page="Models"}}
+                            Repeater {model:s.models.slice(0,3);delegate:RowLayout{required property var modelData;required property int index;Layout.fillWidth:true;spacing:12;Rectangle{width:7;height:7;radius:4;color:[AppStyle.accent,AppStyle.teal,AppStyle.purple][index]}TextLabel {text:modelData.name;Layout.fillWidth:true;font.pixelSize:12}TextLabel {text:modelData.cost;font.pixelSize:12;font.weight:Font.Medium}}}
+                            TextLabel {visible:s.models.length===0;text:"Models will appear as you use your tools.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                            Item{Layout.fillHeight:true}
+                        }
+                    }
                 }
+                UsageChart { objectName:"activityChart";Layout.fillWidth:true;Layout.preferredHeight:Math.max(256,Math.min(290,dashboard.height-600));points:s.chart;detail:s.chartDetail;emptyMessage:s.chartEmpty }
             }
         }
     }

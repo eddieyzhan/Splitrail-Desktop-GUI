@@ -17,7 +17,8 @@ from .domain import UsageDataset, aggregate_period, daily_data_rows, period_for_
 from .presentation import (build_chart_buckets, chart_series, hourly_chart_buckets,
                            format_compact, format_currency, format_date_range)
 from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_override
-from .quota import format_refresh_age, format_countdown, format_local_reset, preserve_banked_resets
+from .quota import (format_refresh_age, format_countdown, format_local_reset,
+                    preserve_banked_resets, is_banked_reset_status_stale)
 from .refresh import AdaptiveRefreshPolicy
 from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
 
@@ -273,6 +274,13 @@ class DesktopController(QObject):
         snapshot = self.quota_snapshot
         if snapshot:
             window = snapshot.base_weekly
+            banks = snapshot.banked_resets
+            expiries = [format_local_reset(stamp) if stamp else 'Does not expire' for stamp in banks.expiries]
+            expiry_details = [f'Reset {index}: {"Does not expire" if stamp is None else "Expires " + shown}'
+                              for index, (stamp, shown) in enumerate(zip(banks.expiries, expiries), start=1)]
+            if banks.count and not banks.expiry_details_complete:
+                expiry_details.append(f'Expiry details: {len(expiries)} of {banks.count} provided by Codex'
+                                      if expiries else 'Expiry times not provided by Codex')
             self._state['quota'] = {
                 'available': window is not None and window.percent_used is not None,
                 'used': window.percent_used if window and window.percent_used is not None else 0,
@@ -282,7 +290,10 @@ class DesktopController(QObject):
                 'age': format_refresh_age(snapshot.refreshed_at or snapshot.generated_at),
                 'stale': snapshot.stale or 'quota' in self._notifications,
                 'banks': snapshot.banked_resets.count if snapshot.banked_resets.count is not None else -1,
-                'expiries': [format_local_reset(stamp) if stamp else 'Time unavailable' for stamp in snapshot.banked_resets.expiries],
+                'expiries': expiries,
+                'bankExpiryDetails': '\n'.join(expiry_details),
+                'banksStale': is_banked_reset_status_stale(banks),
+                'banksAge': format_refresh_age(banks.observed_at),
                 'windows': [{'name': item.label, 'used': f'{item.percent_used:g}%' if item.percent_used is not None else '—',
                              'remaining': f'{item.percent_remaining:g}%' if item.percent_remaining is not None else '—',
                              'reset': format_local_reset(item.resets_at)} for item in snapshot.windows],
