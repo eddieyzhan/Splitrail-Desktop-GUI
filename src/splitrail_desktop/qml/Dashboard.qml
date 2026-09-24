@@ -119,6 +119,7 @@ Item {
                                     Layout.fillWidth:true;Layout.preferredWidth:1;Layout.alignment:Qt.AlignTop;spacing:8
                                     TextLabel {text:"Next reset";font.pixelSize:12;color:AppStyle.muted}
                                     TextLabel {objectName:"overviewResetTime";text:q.resetParts ? q.resetParts.date+(q.resetParts.time ? ", "+q.resetParts.time : "") : "Unavailable";font.pixelSize:12;font.weight:Font.Medium;Layout.fillWidth:true;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                                    TextLabel {objectName:"overviewQuotaAge";text:(q.stale ? "Last known · " : "")+(q.age || "Not yet updated");font.pixelSize:10;color:AppStyle.faint;Layout.fillWidth:true}
                                 }
                                 ColumnLayout {
                                     objectName:"overviewBankedColumn"
