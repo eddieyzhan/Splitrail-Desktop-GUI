@@ -19,6 +19,7 @@ from splitrail_desktop.quota import (
     parse_quota_payload,
     preserve_banked_resets,
     unavailable_banked_resets,
+    weekly_pace_percent,
 )
 
 
@@ -30,6 +31,15 @@ def fixture(name: str) -> str:
 
 
 class QuotaParsingTests(unittest.TestCase):
+    def test_weekly_pace_uses_the_reset_timestamp(self) -> None:
+        reset = datetime(2026, 9, 25, 12, tzinfo=timezone.utc)
+        self.assertEqual(weekly_pace_percent(reset, reset - timedelta(days=7)), 0)
+        self.assertEqual(weekly_pace_percent(reset, reset - timedelta(days=3, hours=12)), 50)
+        self.assertAlmostEqual(weekly_pace_percent(reset, reset - timedelta(days=1)), 100 * 6 / 7)
+        self.assertIsNone(weekly_pace_percent(None, reset))
+        self.assertIsNone(weekly_pace_percent(reset, reset))
+        self.assertIsNone(weekly_pace_percent(reset, reset - timedelta(days=8)))
+
     def test_refresh_age_units_and_missing_or_future_timestamps(self) -> None:
         now = datetime(2026, 9, 22, 10, tzinfo=timezone.utc)
         for seconds, expected in ((0, "0s"), (12, "12s"), (59, "59s"),

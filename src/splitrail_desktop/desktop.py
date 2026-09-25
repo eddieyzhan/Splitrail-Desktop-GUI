@@ -18,7 +18,7 @@ from .presentation import (build_chart_buckets, chart_series, hourly_chart_bucke
                            format_compact, format_currency, format_date_range)
 from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_override
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
-                    preserve_banked_resets, is_banked_reset_status_stale)
+                    preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
 from .refresh import AdaptiveRefreshPolicy
 from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
 
@@ -295,6 +295,7 @@ class DesktopController(QObject):
             self._state['quota'] = {
                 'available': window is not None and window.percent_used is not None,
                 'used': window.percent_used if window and window.percent_used is not None else 0,
+                'paceUsed': weekly_pace_percent(window.resets_at) if window and window.percent_used is not None else None,
                 'remaining': f'{window.percent_remaining:g}%' if window and window.percent_remaining is not None else '—',
                 'reset': format_local_reset(window.resets_at) if window else '',
                 'resetParts': quota_timestamp_parts(window.resets_at if window else None),

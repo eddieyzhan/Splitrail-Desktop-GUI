@@ -1,3 +1,5 @@
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -69,6 +71,30 @@ class QmlTests(QtCase):
         self.controller.tick()
         QTest.qWait(30)
         return self.item('dashboardView')
+
+    def test_weekly_pace_marker_appears_on_both_quota_bars(self):
+        self.dashboard()
+        now = datetime.now(timezone.utc)
+        weekly = replace(self.controller.quota_snapshot.base_weekly, resets_at=now + timedelta(days=3, hours=12))
+        self.controller.quota_snapshot = replace(self.controller.quota_snapshot, windows=(weekly,))
+        self.controller.tick()
+        QTest.qWait(30)
+        for bar_name in ('overviewQuotaBar', 'quotaPageBar'):
+            if bar_name == 'quotaPageBar':
+                self.item('dashboardView').setProperty('page', 'Quota')
+                QTest.qWait(30)
+            bar = self.item(bar_name)
+            marker = bar.findChild(QObject, 'paceMarker')
+            self.assertIsNotNone(marker)
+            self.assertTrue(marker.property('visible'))
+            self.assertAlmostEqual(marker.property('x') + marker.property('width') / 2,
+                                   bar.property('width') / 2, delta=2)
+
+        self.controller.quota_snapshot = replace(self.controller.quota_snapshot,
+                                                 windows=(replace(weekly, resets_at=now - timedelta(minutes=1)),))
+        self.controller.tick()
+        QTest.qWait(30)
+        self.assertFalse(self.item('quotaPageBar').findChild(QObject, 'paceMarker').property('visible'))
 
     def test_onboarding_exclusively_owns_window_and_skip_opens_dashboard(self):
         self.item('onboardingView')

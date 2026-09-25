@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone, tzinfo
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any
 
 
@@ -57,6 +57,18 @@ class QuotaSnapshot:
     def named_windows(self) -> tuple[QuotaWindow, ...]:
         base = self.base_weekly
         return tuple(window for window in self.windows if window is not base)
+
+
+def weekly_pace_percent(resets_at: datetime | None, now: datetime | None = None) -> float | None:
+    """Evenly paced allowance used in the seven days before a weekly reset."""
+    if resets_at is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    remaining = (resets_at - current).total_seconds()
+    week = timedelta(days=7).total_seconds()
+    if remaining <= 0 or remaining > week:
+        return None
+    return 100 * (1 - remaining / week)
 
 
 def parse_quota_json(raw: str) -> QuotaSnapshot:

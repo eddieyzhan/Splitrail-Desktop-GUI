@@ -107,10 +107,10 @@ Item {
                                 TextLabel {text:q.available ? Math.round(q.used)+"% used" : "Unavailable";font.pixelSize:15;font.weight:Font.Medium;color:AppStyle.muted}
                                 SoftButton{iconName:"right";tone:"ghost";implicitWidth:24;implicitHeight:24;accessibleName:"Quota details";onClicked:dashboard.page="Quota"}
                             }
-                            Rectangle {
+                            WeeklyQuotaBar {
                                 objectName:"overviewQuotaBar"
-                                Layout.fillWidth:true;height:10;radius:5;color:AppStyle.fill
-                                Rectangle{width:parent.width*Math.min(100,q.used || 0)/100;height:parent.height;radius:5;color:AppStyle.teal}
+                                Layout.fillWidth:true;barHeight:10;used:q.used || 0
+                                pace:q.paceUsed === null || q.paceUsed === undefined ? -1 : q.paceUsed
                             }
                             RowLayout {
                                 Layout.fillWidth:true;Layout.fillHeight:true;spacing:24
@@ -182,7 +182,7 @@ Item {
                 ColumnLayout{anchors.fill:parent;anchors.margins:28;spacing:14
                     RowLayout{Layout.fillWidth:true;TextLabel {text:"Weekly allowance";font.pixelSize:16;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel {text:(q.stale ? "Last known · " : "")+(q.age || "");font.pixelSize:11;color:AppStyle.muted}}
                     RowLayout{Layout.fillWidth:true;TextLabel {text:q.available ? Math.round(q.used)+"%" : "—";font.pixelSize:38;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.fillWidth:true}TextLabel {text:q.available ? q.remaining+" remaining" : "Quota tools are optional";font.pixelSize:13;color:AppStyle.muted}}
-                    Rectangle{Layout.fillWidth:true;height:7;radius:4;color:AppStyle.fill;Rectangle{width:parent.width*Math.min(100,q.used || 0)/100;height:7;radius:4;color:AppStyle.teal}}
+                    WeeklyQuotaBar{objectName:"quotaPageBar";Layout.fillWidth:true;barHeight:7;used:q.used || 0;pace:q.paceUsed === null || q.paceUsed === undefined ? -1 : q.paceUsed}
                     TextLabel {text:q.available ? "Resets "+q.reset+"  ·  "+q.countdown : "Install quota-axi to display your Codex allowance.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
                 }
             }
