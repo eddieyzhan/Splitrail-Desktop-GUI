@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QFileDialog
 
-from . import preferences, sync
+from . import __version__, preferences, sync
 from .domain import UsageDataset, aggregate_period, daily_data_rows, period_for_preset
 from .presentation import (build_chart_buckets, chart_series, hourly_chart_buckets,
                            format_compact, format_currency, format_date_range)
@@ -90,6 +90,7 @@ class DesktopController(QObject):
         if mode not in ('combined', 'codex', 'local'):
             mode = 'combined' if collector else 'codex'
         self._state = {
+            'appVersion': __version__,
             'theme': prefs.get('theme', 'Pearl'), 'onboarding': bool(onboarding or (not prefs.get('onboarded') and not demo)),
             'setupStage': 'welcome', 'setupError': '', 'setupBusy': False, 'setupLogin': '', 'setupCode': '',
             'ghAvailable': bool(shutil.which('gh')), 'repoName': 'splitrail-usage', 'repoExisting': False,

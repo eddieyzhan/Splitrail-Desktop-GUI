@@ -9,14 +9,22 @@ _qt_dll_directory = None
 
 
 def prepare_desktop_path() -> None:
-    """Finder does not inherit interactive shell PATH customizations."""
+    """Find per-user tools even when the desktop inherits an older PATH."""
+    directories = ()
     if sys.platform == 'darwin':
-        paths = os.environ.get('PATH', '/usr/bin:/bin').split(os.pathsep)
-        for directory in (Path.home() / '.local/bin', Path.home() / '.cargo/bin',
-                          Path.home() / '.npm-global/bin', Path('/opt/homebrew/bin'),
-                          Path('/usr/local/bin')):
-            if directory.is_dir() and str(directory) not in paths:
+        directories = (Path.home() / '.local/bin', Path.home() / '.cargo/bin',
+                       Path.home() / '.npm-global/bin', Path('/opt/homebrew/bin'),
+                       Path('/usr/local/bin'))
+    elif sys.platform == 'win32':
+        directories = (Path.home() / '.local/bin', Path.home() / '.cargo/bin',
+                       Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming')) / 'npm')
+    if directories:
+        paths = os.environ.get('PATH', os.defpath).split(os.pathsep)
+        known = {os.path.normcase(path) for path in paths}
+        for directory in directories:
+            if directory.is_dir() and os.path.normcase(str(directory)) not in known:
                 paths.append(str(directory))
+                known.add(os.path.normcase(str(directory)))
         os.environ['PATH'] = os.pathsep.join(paths)
 
 

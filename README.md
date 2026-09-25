@@ -90,6 +90,7 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 | A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → Model pricing → Manage prices**. Tokens remain visible for unknown models. |
 | An estimate differs from your bill | Estimates depend on saved usage and configured prices. They cannot reconstruct subscription charges, all service tiers or every billing surcharge. [Pricing details](docs/REFERENCE.md#pricing). |
 | GitHub sync fails | Confirm GitHub CLI is signed in (`gh auth status`), check repository access and ensure the repository is private. The last successfully downloaded totals are retained after a failed sync. |
+| Sync says the Splitrail collector was not found | **All tools** sync needs the separate collector even if the dashboard is showing Codex. Install Splitrail 3.9.1+, or select **Settings → GitHub sync → Options → Share from this device → Codex**. Version 1.1.3 reports this cause instead of the generic “Unable to sync” error. On Windows, the app also discovers tools in `%USERPROFILE%\.local\bin`, `%USERPROFILE%\.cargo\bin` and `%APPDATA%\npm`. |
 | Codex quotas are unavailable | Quota monitoring uses optional tools with their own authentication. It is separate from usage tracking. [Setup details](docs/REFERENCE.md#optional-quota-monitoring). |
 
 For bug reports, include your OS, Python version, app version and the error message. Do not attach raw session logs, credentials or real-account screenshots. See [Privacy](PRIVACY.md).

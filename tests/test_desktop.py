@@ -131,6 +131,20 @@ class DesktopTests(QtCase):
         self.assertIsNone(sync.settings())
         self.assertEqual(c.state['settingsError'], '')
 
+    def test_manual_sync_shows_missing_collector_remedy(self):
+        from splitrail_desktop.runner import MissingCommandError
+        c = self.controller
+        with patch('splitrail_desktop.sync._private_repo', return_value={'private': True}), \
+             patch('splitrail_desktop.runner.run_splitrail', side_effect=MissingCommandError('missing')):
+            sync.configure('example/private', scope='all')
+            c._load_settings()
+            c.syncNow()
+            self.wait_for(lambda: not c.state['syncBusy'])
+        self.assertIn('All tools sync needs the Splitrail collector', c.state['settingsError'])
+        self.assertIn('Codex', c.state['settingsError'])
+        self.assertTrue(c.state['connected'])
+        self.assertEqual(c.state['notifications'][0]['detail'], c.state['settingsError'])
+
     def test_display_uses_combined_data_for_metrics_tables_and_chart(self):
         c = self.controller
         combined = add_imported_usage(collector_fixture(), [event('laptop')])

@@ -197,12 +197,24 @@ def disconnect(directory: Path | None = None) -> None:
 
 def _collect(config: dict) -> dict:
     # Never upload imports, received devices, quota or account information.
-    if config['scope'] == 'all':
-        from .runner import run_splitrail
-        dataset = run_splitrail().dataset
-    else:
-        from .portable import scan_codex, usage_dataset
-        dataset = usage_dataset(scan_codex()['events'])
+    from .runner import LocalCommandError, MissingCommandError, run_splitrail
+    try:
+        if config['scope'] == 'all':
+            dataset = run_splitrail().dataset
+        else:
+            from .portable import scan_codex, usage_dataset
+            dataset = usage_dataset(scan_codex()['events'])
+    except MissingCommandError as exc:
+        raise SyncError(
+            'All tools sync needs the Splitrail collector, which was not found. '
+            'Install Splitrail 3.9.1 or newer, or choose Codex under '
+            'Settings → GitHub sync → Options → Share from this device.'
+        ) from exc
+    except LocalCommandError as exc:
+        detail = str(exc).replace(str(Path.home()), '~')
+        raise SyncError('All tools sync could not read local usage. ' + detail) from exc
+    except OSError as exc:
+        raise SyncError('Local usage files could not be read. Check file access and try Sync again.') from exc
     return encode_dataset(dataset, config['device'], config['scope'])
 
 

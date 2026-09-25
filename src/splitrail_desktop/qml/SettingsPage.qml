@@ -54,6 +54,7 @@ Flickable {
                         visible: page.advanced; Layout.fillWidth: true; spacing: 14
                         RowLayout { Layout.fillWidth: true; TextLabel { text: "Download only"; font.pixelSize: 13; Layout.fillWidth: true } SoftSwitch { checked: s.receiveOnly; enabled: !s.syncBusy; onToggled: bridge.updateSync(s.automatic,checked,s.syncScope) } }
                         RowLayout { Layout.fillWidth: true; TextLabel { text: "Share from this device"; font.pixelSize: 13; Layout.fillWidth: true } Segmented { options: ["All tools","Codex"]; selected: s.syncScope==="all" ? 0 : 1; enabled: !s.syncBusy; onChosen: function(i){bridge.updateSync(s.automatic,s.receiveOnly,i===0 ? "all" : "codex")} } }
+                        TextLabel { visible: !s.receiveOnly; text: s.syncScope==="all" ? "All tools sync requires the separate Splitrail collector on this device." : "Codex sync reads local usage directly; no collector is needed."; color: AppStyle.muted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone }
                         SoftButton { text: "Disconnect"; tone: "ghost"; enabled: !s.syncBusy; onClicked: disconnectConfirm.open() }
                     }
                 }
@@ -79,7 +80,7 @@ Flickable {
                 RowLayout { Layout.fillWidth: true; SoftButton { text: "Get the Splitrail collector"; iconName: "external"; tone: "ghost"; compact: true; onClicked: bridge.openLink("https://github.com/Piebald-AI/splitrail") } Item { Layout.fillWidth: true } SoftButton { text: "Remove imports"; tone: "ghost"; compact: true; enabled: !s.transferBusy; onClicked: importsConfirm.open() } }
             }
         }
-        TextLabel { text: "Splitrail 1.1  ·  Local first. No telemetry."; color: AppStyle.faint; font.pixelSize: 11; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 2 }
+        TextLabel { text: "Splitrail " + s.appVersion + "  ·  Local first. No telemetry."; color: AppStyle.faint; font.pixelSize: 11; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 2 }
     }
     Popup {
         id: disconnectConfirm; parent: Overlay.overlay; anchors.centerIn: parent; width: 410; padding: 28; modal: true

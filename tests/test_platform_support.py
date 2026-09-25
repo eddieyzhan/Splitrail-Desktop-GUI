@@ -9,6 +9,26 @@ from splitrail_desktop.platform_support import prepare_desktop_path, command_opt
 
 
 class PlatformTests(unittest.TestCase):
+    def test_windows_desktop_finds_user_tools_without_replacing_path(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            local_bin = home / '.local/bin'
+            npm = home / 'AppData/Roaming/npm'
+            for folder in (local_bin, npm):
+                folder.mkdir(parents=True)
+            (local_bin / 'splitrail.exe').touch()
+            with patch('splitrail_desktop.platform_support.sys.platform', 'win32'), \
+                 patch('splitrail_desktop.platform_support.Path.home', return_value=home), \
+                 patch.dict(os.environ, {'PATH': str(home / 'existing'), 'APPDATA': str(npm.parent)}):
+                prepare_desktop_path()
+                first = os.environ['PATH']
+                prepare_desktop_path()
+                self.assertEqual(first, os.environ['PATH'])
+                self.assertEqual(first.split(os.pathsep), [str(home / 'existing'), str(local_bin), str(npm)])
+                if os.name == 'nt':
+                    self.assertEqual(Path(shutil.which('splitrail')), local_bin / 'splitrail.exe')
+
     def test_finder_path_preserves_existing_entries_and_adds_installed_tools(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

@@ -209,6 +209,53 @@ class GitHubSyncTests(unittest.TestCase):
         collect.assert_called_once()
         self.assertEqual(len(result['days']), 3)
 
+    def test_missing_collector_explains_source_and_preserves_saved_totals(self):
+        from splitrail_desktop.runner import MissingCommandError
+        directory, config = self.device('a', automatic=True)
+        sync.sync_now(directory, snapshot=self.snapshot(config))
+        original = (directory / sync.CACHE_FILE).read_bytes()
+        writes = len(self.api.writes)
+        with patch('splitrail_desktop.runner.run_splitrail', side_effect=MissingCommandError('missing')), \
+             patch('splitrail_desktop.sync.data_dir', return_value=directory):
+            with self.assertRaisesRegex(sync.SyncError, 'All tools sync needs the Splitrail collector') as raised:
+                sync.sync_now(directory)
+            self.assertIn('Share from this device', str(raised.exception))
+            self.assertIn('Codex', str(raised.exception))
+            self.assertIn('last downloaded', sync.auto_receive())
+        self.assertEqual(len(self.api.writes), writes)
+        self.assertEqual((directory / sync.CACHE_FILE).read_bytes(), original)
+        self.assertEqual(sync.settings(directory)['scope'], 'all')
+        self.assertIn('Offline', sync.status_text(directory))
+
+    def test_collector_failure_keeps_actionable_diagnostic(self):
+        from splitrail_desktop.runner import LocalCommandError
+        directory, _ = self.device('a')
+        with patch('splitrail_desktop.runner.run_splitrail', side_effect=LocalCommandError(
+                f'Upgrade to Splitrail 3.9.1 or newer (executable: {Path.home()}/bin/splitrail).')):
+            with self.assertRaisesRegex(sync.SyncError, 'Upgrade to Splitrail 3.9.1') as raised:
+                sync.sync_now(directory)
+        self.assertNotIn(str(Path.home()), str(raised.exception))
+        self.assertEqual(self.api.writes, [])
+
+    def test_codex_sync_and_download_only_do_not_require_collector(self):
+        from splitrail_desktop.runner import MissingCommandError
+        sender, config = self.device('codex', scope='codex')
+        receiver, _ = self.device('receiver', receive_only=True)
+        with patch('splitrail_desktop.runner.run_splitrail', side_effect=MissingCommandError('missing')) as collector, \
+             patch('splitrail_desktop.portable.scan_codex', return_value={'events': []}):
+            sync.sync_now(sender)
+            sync.sync_now(receiver)
+        collector.assert_not_called()
+        self.assertEqual(sync.cached_devices(receiver)[config['device']]['scope'], 'codex')
+
+    def test_unreadable_local_logs_report_file_access_without_upload(self):
+        directory, _ = self.device('a', scope='codex')
+        with patch('splitrail_desktop.portable.scan_codex', side_effect=PermissionError('private path')):
+            with self.assertRaisesRegex(sync.SyncError, 'Check file access') as raised:
+                sync.sync_now(directory)
+        self.assertNotIn('private path', str(raised.exception))
+        self.assertEqual(self.api.writes, [])
+
     def test_conflict_preserves_previous_cache(self):
         directory, config = self.device('a')
         sync.sync_now(directory, snapshot=self.snapshot(config))
