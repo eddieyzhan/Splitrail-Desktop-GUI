@@ -18,6 +18,10 @@ def prepare_desktop_path() -> None:
     elif sys.platform == 'win32':
         directories = (Path.home() / '.local/bin', Path.home() / '.cargo/bin',
                        Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming')) / 'npm')
+    elif sys.platform.startswith('linux'):
+        # Desktop launchers may not inherit the user's interactive shell PATH.
+        directories = (Path.home() / '.local/bin', Path.home() / '.cargo/bin',
+                       Path.home() / '.npm-global/bin', Path('/usr/local/bin'))
     if directories:
         paths = os.environ.get('PATH', os.defpath).split(os.pathsep)
         known = {os.path.normcase(path) for path in paths}

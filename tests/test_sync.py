@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -208,6 +210,41 @@ class GitHubSyncTests(unittest.TestCase):
             result = sync._collect(config)
         collect.assert_called_once()
         self.assertEqual(len(result['days']), 3)
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux collector subprocess')
+    def test_linux_desktop_sync_finds_cargo_collector_with_restricted_path(self):
+        from splitrail_desktop.__main__ import main
+        from test_activity import fixture, local_zone
+        home = self.root / 'home'
+        executable = home / '.cargo/bin/splitrail'
+        executable.parent.mkdir(parents=True)
+        executable.write_text(
+            '#!/bin/sh\n'
+            'if [ "$1" = "--version" ]; then\n'
+            '  printf "splitrail 3.9.1\\n"\n'
+            'elif [ "$1" = "stats" ] && [ "$2" = "--include-messages" ]; then\n'
+            '  cat <<\'SYNTHETIC_USAGE\'\n' + json.dumps(fixture()) + '\n'
+            'SYNTHETIC_USAGE\n'
+            'else\n  exit 1\nfi\n', encoding='utf-8')
+        executable.chmod(0o755)
+        sender, config = self.device('sender')
+        receiver, _ = self.device('receiver', receive_only=True)
+        with local_zone('UTC'), \
+             patch('splitrail_desktop.platform_support.Path.home', return_value=home), \
+             patch('splitrail_desktop.runner.SPLITRAIL_FALLBACK', home / '.local/bin/splitrail'), \
+             patch('splitrail_desktop.portable.data_dir', return_value=sender), \
+             patch('splitrail_desktop.sync.data_dir', return_value=sender), \
+             patch.dict(os.environ, {'PATH': '/usr/bin:/bin', 'SPLITRAIL_BIN': ''}):
+            # Exercise the same startup as the desktop and command-line sync.
+            with patch('builtins.print') as output:
+                result = main(['--sync-usage'])
+            self.assertEqual(result, 0, output.call_args_list)
+            sync.sync_now(receiver)
+        uploaded = sync.cached_devices(receiver)[config['device']]
+        self.assertEqual(uploaded['scope'], 'all')
+        self.assertEqual(uploaded['days'][0]['tokens']['input'], 300)
+        self.assertEqual(len(self.api.writes), 1)
+        self.assertNotIn(b'PRIVATE', base64.b64decode(self.api.writes[0]['content']))
 
     def test_missing_collector_explains_source_and_preserves_saved_totals(self):
         from splitrail_desktop.runner import MissingCommandError
