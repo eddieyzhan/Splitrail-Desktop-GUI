@@ -31,7 +31,7 @@ Popup {
                         width: ListView.view.width; height: 55
                         onClicked: dialog.select(modelData)
                         background: Rectangle { radius: 10; color: dialog.selected.name===modelData.name ? AppStyle.accentFill : parent.hovered ? AppStyle.fill : "transparent" }
-                        contentItem: ColumnLayout { spacing: 4; TextLabel { text: modelData.name; font.pixelSize: 12; font.weight: Font.Medium; Layout.fillWidth: true } TextLabel { text: modelData.custom ? "Custom price" : modelData.missing ? "Needs pricing" : modelData.provider; font.pixelSize: 10; color: AppStyle.muted } }
+                        contentItem: ColumnLayout { spacing: 4; TextLabel { text: modelData.name; font.pixelSize: 12; font.weight: Font.Medium; Layout.fillWidth: true } TextLabel { text: modelData.custom ? "Custom price" : modelData.missing ? modelData.priceNote || "Needs pricing" : modelData.provider; font.pixelSize: 10; color: AppStyle.muted } }
                     }
                 }
                 SoftButton { text: "Add model"; iconName: "plus"; Layout.fillWidth: true; onClicked: {dialog.select({});name.forceActiveFocus()} }

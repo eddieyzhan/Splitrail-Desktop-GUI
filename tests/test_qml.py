@@ -11,6 +11,7 @@ import shiboken6
 from qt_support import QtCase
 from splitrail_desktop import demo, sync
 from splitrail_desktop.pricing import load_overrides
+from splitrail_desktop.quota import BankedResetStatus, format_local_reset
 
 QML = Path(__file__).parents[1] / 'src' / 'splitrail_desktop' / 'qml'
 
@@ -95,6 +96,27 @@ class QmlTests(QtCase):
         self.controller.tick()
         QTest.qWait(30)
         self.assertFalse(self.item('quotaPageBar').findChild(QObject, 'paceMarker').property('visible'))
+
+    def test_quota_page_names_codex_and_shows_exact_banked_expiries(self):
+        self.dashboard()
+        expiry = datetime(2026, 10, 1, 4, 5, 6, tzinfo=timezone.utc)
+        banks = BankedResetStatus('fresh', count=2, expiries=(expiry, None),
+                                  expiry_details_complete=True, observed_at=datetime.now(timezone.utc))
+        self.controller.quota_snapshot = replace(self.controller.quota_snapshot, banked_resets=banks)
+        self.controller.tick()
+        self.item('dashboardView').setProperty('page', 'Quota')
+        QTest.qWait(30)
+        self.assertEqual(self.item('quotaProviderLabel').property('text'), 'Codex weekly allowance')
+        self.assertEqual(self.item('bankedResetCount').property('text'), '2 available')
+        self.assertEqual(self.item('bankExpiry-0').property('text'), 'Expires ' + format_local_reset(expiry))
+        self.assertEqual(self.item('bankExpiry-1').property('text'), 'Does not expire')
+
+        self.controller.quota_snapshot = replace(self.controller.quota_snapshot,
+                                                 banked_resets=BankedResetStatus('unavailable'))
+        self.controller.tick()
+        QTest.qWait(30)
+        self.assertEqual(self.item('bankedResetCount').property('text'), 'Unavailable')
+        self.assertIn('unavailable', self.item('bankedResetNotice').property('text'))
 
     def test_onboarding_exclusively_owns_window_and_skip_opens_dashboard(self):
         self.item('onboardingView')

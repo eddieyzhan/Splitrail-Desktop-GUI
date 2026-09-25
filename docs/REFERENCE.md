@@ -22,7 +22,7 @@ Built-in rates cover common OpenAI/Codex, Anthropic/Claude, Google/Gemini and xA
 
 Prices are USD per million tokens. Custom rates override matching models locally; `0` means free, and unused cache fields can stay blank. Existing nonzero collector estimates are preserved unless overridden. Missing costs are filled from the catalogue. Gemini aliases are normalized, cache tokens are charged once, and reasoning already included in output is not charged again.
 
-Unknown models keep their tokens and appear in **Notifications**, with a shortcut to pricing settings. Daily aggregate fallbacks cannot infer request-level long-context premiums, media, paid tools, cache duration, service tiers, or subscription invoices. Synced costs retain the sender's estimate; another device's local price overrides do not rewrite them. Custom rate configuration itself stays local.
+Unknown models keep their tokens and appear in **Notifications**, with a shortcut to pricing settings. GPT-5.3-Codex-Spark remains unpriced because OpenAI has not published a final rate for its research preview. Daily aggregate fallbacks cannot infer request-level long-context premiums, media, paid tools, cache duration, service tiers, or subscription invoices. Synced costs retain the sender's estimate; another device's local price overrides do not rewrite them. Custom rate configuration itself stays local.
 
 ## Optional quota monitoring
 
@@ -44,7 +44,7 @@ The app streams `splitrail stats --include-messages` to calculate hourly activit
 
 Manual Codex transfer is available under **Settings → Usage & data → Export / Import**. Exports contain timestamps, model/source identifiers, token counts, hashed request/session identifiers, and scan metadata. They contain no conversation content. Manual imports merge by request identity and preserve older imported records. Manual export uploads nothing.
 
-Normal refresh starts after launch and repeats every 15 minutes, switching to 5 minutes while usage changes. Automatic GitHub sync runs on these usage refreshes only when explicitly enabled and viewing **All devices** or **Codex**. The app must remain open. The header shows time since the last successful usage refresh; quota cards show the quota source’s refresh age. Stale quota values are marked as last known.
+Normal usage refresh starts after launch and repeats every 15 minutes, switching to 5 minutes while usage changes. Codex quota and banked resets refresh separately every minute while the app is open, or retry after 5 minutes if a read fails. Automatic GitHub sync runs on usage refreshes only when explicitly enabled and viewing **All devices** or **Codex**. The header shows time since the last successful usage refresh; quota cards show the quota source’s refresh age. Stale quota values are marked as last known.
 
 Executable discovery uses PATH and standard per-user install locations. Optional overrides: `SPLITRAIL_BIN`, `QUOTA_AXI_BIN`, `CODEX_BIN`.
 

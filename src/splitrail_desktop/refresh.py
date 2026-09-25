@@ -9,6 +9,8 @@ from .domain import DailyUsage, ModelDetail, TokenUsage, UsageDataset
 
 NORMAL_REFRESH_SECONDS = 15 * 60
 FAST_REFRESH_SECONDS = 5 * 60
+QUOTA_REFRESH_SECONDS = 60
+QUOTA_RETRY_SECONDS = 5 * 60
 
 
 @dataclass(frozen=True)

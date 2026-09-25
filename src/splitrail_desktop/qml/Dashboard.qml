@@ -176,19 +176,39 @@ Item {
     }
     Component {
         id:quotaPage
-        ColumnLayout {
-            spacing:20
-            Rectangle {Layout.fillWidth:true;height:182;radius:20;color:AppStyle.surface
-                ColumnLayout{anchors.fill:parent;anchors.margins:28;spacing:14
-                    RowLayout{Layout.fillWidth:true;TextLabel {text:"Weekly allowance";font.pixelSize:16;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel {text:(q.stale ? "Last known · " : "")+(q.age || "");font.pixelSize:11;color:AppStyle.muted}}
-                    RowLayout{Layout.fillWidth:true;TextLabel {text:q.available ? Math.round(q.used)+"%" : "—";font.pixelSize:38;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.fillWidth:true}TextLabel {text:q.available ? q.remaining+" remaining" : "Quota tools are optional";font.pixelSize:13;color:AppStyle.muted}}
-                    WeeklyQuotaBar{objectName:"quotaPageBar";Layout.fillWidth:true;barHeight:7;used:q.used || 0;pace:q.paceUsed === null || q.paceUsed === undefined ? -1 : q.paceUsed}
-                    TextLabel {text:q.available ? "Resets "+q.reset+"  ·  "+q.countdown : "Install quota-axi to display your Codex allowance.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
+        Flickable {
+            clip:true;contentWidth:width;contentHeight:Math.max(height,quotaContent.implicitHeight);boundsBehavior:Flickable.StopAtBounds;ScrollBar.vertical:SoftScrollBar{}
+            ColumnLayout {
+                id:quotaContent;width:parent.width-4;spacing:20
+                Rectangle {Layout.fillWidth:true;Layout.preferredHeight:182;radius:20;color:AppStyle.surface
+                    ColumnLayout{anchors.fill:parent;anchors.margins:28;spacing:14
+                        RowLayout{Layout.fillWidth:true;TextLabel {objectName:"quotaProviderLabel";text:"Codex weekly allowance";font.pixelSize:16;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel {text:(q.stale ? "Last known · " : "")+(q.age || "");font.pixelSize:11;color:AppStyle.muted}}
+                        RowLayout{Layout.fillWidth:true;TextLabel {text:q.available ? Math.round(q.used)+"%" : "—";font.pixelSize:38;font.weight:Font.DemiBold;font.letterSpacing:-1;Layout.fillWidth:true}TextLabel {text:q.available ? q.remaining+" remaining" : "Quota tools are optional";font.pixelSize:13;color:AppStyle.muted}}
+                        WeeklyQuotaBar{objectName:"quotaPageBar";Layout.fillWidth:true;barHeight:7;used:q.used || 0;pace:q.paceUsed === null || q.paceUsed === undefined ? -1 : q.paceUsed}
+                        TextLabel {text:q.available ? "Resets "+q.reset+"  ·  "+q.countdown : "Install quota-axi to display your Codex allowance.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
+                    }
                 }
+                Rectangle {
+                    Layout.fillWidth:true;Layout.preferredHeight:bankContent.implicitHeight+40;radius:20;color:AppStyle.surface
+                    ColumnLayout {
+                        id:bankContent;anchors.fill:parent;anchors.margins:20;spacing:12
+                        RowLayout{Layout.fillWidth:true;TextLabel{text:"Banked resets";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel{objectName:"bankedResetCount";text:q.banks>=0 ? q.banks+" available" : "Unavailable";font.pixelSize:12;color:AppStyle.muted}}
+                        TextLabel{visible:q.banksStale;Layout.fillWidth:true;text:"Last known · "+q.banksAge;font.pixelSize:11;color:AppStyle.muted}
+                        Repeater {
+                            model:q.expiries || []
+                            delegate:RowLayout {
+                                required property var modelData;required property int index
+                                Layout.fillWidth:true;spacing:16
+                                TextLabel{text:"Reset "+(index+1);font.pixelSize:12;color:AppStyle.muted}
+                                TextLabel{objectName:"bankExpiry-"+index;text:modelData==="Does not expire" ? modelData : "Expires "+modelData;Layout.fillWidth:true;font.pixelSize:12;font.weight:Font.Medium;horizontalAlignment:Text.AlignRight;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                            }
+                        }
+                        TextLabel{objectName:"bankedResetNotice";visible:text!=="";Layout.fillWidth:true;text:q.banks<0 ? "Banked reset details are unavailable from Codex." : q.banks===0 ? "No banked resets available." : q.bankExpiryNotice || "";font.pixelSize:11;color:AppStyle.muted;wrapMode:Text.WordWrap;elide:Text.ElideNone}
+                    }
+                }
+                RowLayout{Layout.fillWidth:true;TextLabel {text:"Usage windows";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}}
+                DataTable{Layout.fillWidth:true;Layout.preferredHeight:220;rows:q.windows || [];columns:[{key:"name",label:"Window",weight:3},{key:"used",label:"Used",weight:1},{key:"remaining",label:"Remaining",weight:1.4},{key:"reset",label:"Resets",weight:3}]}
             }
-            RowLayout{Layout.fillWidth:true;TextLabel {text:"Usage windows";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel {text:q.banks>=0 ? q.banks+" banked resets" : "";color:AppStyle.muted;font.pixelSize:12}}
-            DataTable{Layout.fillWidth:true;Layout.fillHeight:true;rows:q.windows || [];columns:[{key:"name",label:"Window",weight:3},{key:"used",label:"Used",weight:1},{key:"remaining",label:"Remaining",weight:1.4},{key:"reset",label:"Resets",weight:3}]}
-            TextLabel {visible:!!q.expiries && q.expiries.length>0;text:q.expiries ? "Banked resets: "+q.expiries.join(" · ") : "";color:AppStyle.muted;font.pixelSize:11;wrapMode:Text.WordWrap;elide:Text.ElideNone;Layout.fillWidth:true}
         }
     }
     Component{id:settings;SettingsPage{onPricingRequested:pricing.open()}}

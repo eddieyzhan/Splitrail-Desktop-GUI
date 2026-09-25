@@ -47,6 +47,17 @@ class PricingTests(unittest.TestCase):
         self.assertEqual({v['provider'] for v in CATALOG['models'].values()}, {'OpenAI', 'Anthropic', 'Google', 'xAI'})
         self.assertEqual(resolve_rates('grok-code-fast-1'), resolve_rates('grok-build-0.1'))
 
+    def test_gpt_6_sol_and_luna_use_published_standard_rates(self):
+        self.assertEqual(
+            {key: resolve_rates('gpt-6-sol')[key] for key in ('input', 'cache_read', 'cache_write', 'output')},
+            {'input': 2, 'cache_read': 0.2, 'cache_write': 2.5, 'output': 10},
+        )
+        self.assertEqual(
+            {key: resolve_rates('gpt-6-luna')[key] for key in ('input', 'cache_read', 'cache_write', 'output')},
+            {'input': 0.1, 'cache_read': 0.01, 'cache_write': 0.125, 'output': 0.5},
+        )
+        self.assertIsNone(resolve_rates('gpt-5.3-codex-spark'))
+
     def test_gemini_cost_includes_thinking_and_cache_once(self):
         original = dataset()
         updated, resolved, unknown = reprice_dataset(original)

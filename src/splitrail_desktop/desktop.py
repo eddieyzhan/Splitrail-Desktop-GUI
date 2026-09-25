@@ -19,7 +19,7 @@ from .presentation import (build_chart_buckets, chart_series, hourly_chart_bucke
 from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_override
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
-from .refresh import AdaptiveRefreshPolicy
+from .refresh import AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
 from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
 
 
@@ -78,6 +78,9 @@ class DesktopController(QObject):
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.refresh)
+        self._quota_timer = QTimer(self)
+        self._quota_timer.setSingleShot(True)
+        self._quota_timer.timeout.connect(self.refreshQuota)
         self._clock = QTimer(self)
         self._clock.timeout.connect(self.tick)
         self._clock.start(1000)
@@ -173,10 +176,21 @@ class DesktopController(QObject):
                     return run_portable_usage()
                 return run_splitrail()
             self._run('usage', collect, generation)
-        if 'quota' not in self._tasks:
-            self._state['quotaBusy'] = True
-            self._run('quota', run_quota_axi)
+        self._start_quota_refresh()
         self._emit()
+
+    def _start_quota_refresh(self) -> bool:
+        if self.closed or self.demo or self._state['onboarding'] or 'quota' in self._tasks:
+            return False
+        self._quota_timer.stop()
+        self._state['quotaBusy'] = True
+        self._run('quota', run_quota_axi)
+        return True
+
+    @Slot()
+    def refreshQuota(self):
+        if self._start_quota_refresh():
+            self._emit()
 
     def _accept_usage(self, result):
         self.usage_result = result
@@ -233,6 +247,9 @@ class DesktopController(QObject):
                 self._notifications.pop('quota', None)
                 self.quota_snapshot = preserve_banked_resets(value.snapshot, self.quota_snapshot)
             self.tick()
+            if self.auto_refresh:
+                interval = QUOTA_RETRY_SECONDS if error else QUOTA_REFRESH_SECONDS
+                self._quota_timer.start(interval * 1000)
         elif kind in ('account', 'auth', 'connect'):
             self._state['setupBusy'] = False
             if error:
@@ -426,6 +443,7 @@ class DesktopController(QObject):
     @Slot()
     def beginSetup(self):
         self._timer.stop()
+        self._quota_timer.stop()
         self._auth_cancel.set()
         self._setup_generation += 1
         self._state.update(onboarding=True, setupStage='welcome', setupError='', setupBusy=False, setupCode='')
@@ -573,6 +591,7 @@ class DesktopController(QObject):
                 builtin = CATALOG['models'].get(name, {})
                 rows.append({'name': name, 'provider': builtin.get('provider', 'Custom'),
                              'custom': name in overrides, 'missing': rate is None,
+                             'priceNote': CATALOG.get('unpriced', {}).get(name, ''),
                              **{key: str(rate[key]) if rate and rate.get(key) is not None else '' for key in RATE_FIELDS}})
             self._state['prices'] = rows
         except (ValueError, OSError) as exc:
@@ -661,4 +680,5 @@ class DesktopController(QObject):
         self.closed = True
         self._auth_cancel.set()
         self._timer.stop()
+        self._quota_timer.stop()
         self._clock.stop()

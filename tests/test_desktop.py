@@ -8,9 +8,9 @@ from splitrail_desktop import demo, preferences, sync
 from splitrail_desktop.desktop import shifted_range
 from splitrail_desktop.domain import aggregate_period, UsageDataset
 from splitrail_desktop.pricing import load_overrides
-from splitrail_desktop.refresh import NORMAL_REFRESH_SECONDS
+from splitrail_desktop.refresh import NORMAL_REFRESH_SECONDS, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
 from splitrail_desktop.quota import BankedResetStatus, format_local_reset
-from splitrail_desktop.runner import CostDiagnostics, StatsCommandResult
+from splitrail_desktop.runner import CostDiagnostics, QuotaCommandResult, StatsCommandResult
 from test_combined import collector_fixture, event
 from splitrail_desktop.combined import add_imported_usage
 
@@ -200,9 +200,12 @@ class DesktopTests(QtCase):
 
     def test_unknown_models_are_available_in_price_editor(self):
         c = self.controller
-        c._accept_usage(replace(demo.usage(), cost_diagnostics=CostDiagnostics(('unknown-model',), 0, 0, ())))
+        c._accept_usage(replace(demo.usage(), cost_diagnostics=CostDiagnostics(('unknown-model', 'gpt-5.3-codex-spark'), 0, 0, ())))
         c.loadPrices()
         self.assertTrue(next(row for row in c.state['prices'] if row['name'] == 'unknown-model')['missing'])
+        spark = next(row for row in c.state['prices'] if row['name'] == 'gpt-5.3-codex-spark')
+        self.assertTrue(spark['missing'])
+        self.assertIn('public rate unavailable', spark['priceNote'])
 
     def test_refresh_age_ticks_and_quota_failure_retains_last_good_snapshot(self):
         c = self.controller
@@ -257,10 +260,26 @@ class DesktopTests(QtCase):
         c._finished('usage', demo.usage(), None, c._usage_generation)
         self.assertEqual(c._timer.interval(), NORMAL_REFRESH_SECONDS * 1000)
         self.assertTrue(c._timer.isActive())
+        c._finished('quota', QuotaCommandResult(demo.quota(), 0), None, -1)
+        self.assertEqual(c._quota_timer.interval(), QUOTA_REFRESH_SECONDS * 1000)
+        self.assertTrue(c._quota_timer.isActive())
+        c._finished('quota', None, RuntimeError('Offline'), -1)
+        self.assertEqual(c._quota_timer.interval(), QUOTA_RETRY_SECONDS * 1000)
         c.beginSetup()
         self.assertFalse(c._timer.isActive())
+        self.assertFalse(c._quota_timer.isActive())
         c.close()
         self.assertFalse(c._clock.isActive())
+
+    def test_quota_timer_refreshes_quota_without_scanning_usage(self):
+        c = self.controller
+        c.finishSetup()
+        with patch('splitrail_desktop.desktop.run_quota_axi', return_value=QuotaCommandResult(demo.quota(), 0)) as quota, \
+             patch('splitrail_desktop.desktop.run_splitrail') as usage:
+            c.refreshQuota()
+            self.wait_for(lambda: not c.state['quotaBusy'])
+            quota.assert_called_once_with()
+            usage.assert_not_called()
 
     def test_clock_tick_does_not_reset_table_models(self):
         c = self.controller
