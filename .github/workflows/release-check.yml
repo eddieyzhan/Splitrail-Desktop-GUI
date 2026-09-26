@@ -1,0 +1,72 @@
+name: Native release checks
+
+# Build only when explicitly requested; publishing remains a separate step.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-22.04
+            archive: dist/splitrail-desktop-linux-x86_64.tar.gz
+          - platform: windows-x86_64
+            runner: windows-2022
+            archive: dist/splitrail-desktop-windows-x86_64.zip
+          - platform: macos-arm64
+            runner: macos-14
+            archive: dist/splitrail-desktop-macos-arm64.zip
+    env:
+      PYTHONPATH: src
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Install Linux runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0
+      - name: Install release dependencies
+        run: python -m pip install -r scripts/requirements-release.txt
+      - name: Run synthetic tests
+        run: python -m unittest discover -s tests -v
+      - name: Build and check the Python download
+        run: |
+          python scripts/build.py
+          python dist/splitrail-desktop.pyz --self-check
+          python dist/splitrail-desktop.pyz --smoke-ui
+          python dist/splitrail-desktop.pyz --smoke-ui --onboarding
+      - name: Build and smoke-test the native app
+        run: python scripts/build_native.py
+      - name: Save native download
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+      - name: Save Python download
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-python
+          path: dist/splitrail-desktop.pyz
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0

@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -211,6 +212,41 @@ class GitHubSyncTests(unittest.TestCase):
         collect.assert_called_once()
         self.assertEqual(len(result['days']), 3)
 
+    def test_inconsistent_hourly_detail_does_not_block_device_sync(self):
+        import io
+        from splitrail_desktop.activity import parse_collector_stream
+        from test_activity import inconsistent_reasoning_fixture, local_zone
+        with local_zone('UTC'):
+            dataset = parse_collector_stream(io.BytesIO(
+                json.dumps(inconsistent_reasoning_fixture()).encode()))
+        sender, config = self.device('sender')
+        receiver, _ = self.device('receiver', receive_only=True)
+        with patch('splitrail_desktop.runner._find_executable', return_value='splitrail'), \
+             patch('splitrail_desktop.runner._check_splitrail_version'), \
+             patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, '')):
+            self.assertEqual(sync.sync_now(sender)['status'], 'Up to date')
+        self.assertEqual(sync.sync_now(receiver)['devices'], 2)
+        received = decode_dataset(sync.cached_devices(receiver)[config['device']])
+        self.assertEqual(received.days, dataset.days)
+        self.assertEqual([h.hour for h in received.hours], [14])
+        self.assertNotIn(b'PRIVATE', base64.b64decode(self.api.writes[0]['content']))
+
+    def test_invalid_local_totals_report_validation_failure_without_upload(self):
+        from splitrail_desktop.runner import StatsCommandResult, CostDiagnostics
+        directory, config = self.device('a')
+        sync.sync_now(directory, snapshot=self.snapshot(config))
+        original = (directory / sync.CACHE_FILE).read_bytes()
+        writes = len(self.api.writes)
+        dataset = collector_fixture()
+        day = dataset.days[0]
+        invalid = replace(dataset, days=(replace(day, tokens=replace(day.tokens, input=-1)),))
+        with patch('splitrail_desktop.runner.run_splitrail', return_value=StatsCommandResult(
+                invalid, CostDiagnostics((), 0, 0, ()), 0)):
+            with self.assertRaisesRegex(sync.SyncError, 'Local usage totals failed validation'):
+                sync.sync_now(directory)
+        self.assertEqual(len(self.api.writes), writes)
+        self.assertEqual((directory / sync.CACHE_FILE).read_bytes(), original)
+
     @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux collector subprocess')
     def test_linux_desktop_sync_finds_cargo_collector_with_restricted_path(self):
         from splitrail_desktop.__main__ import main
@@ -304,6 +340,23 @@ class GitHubSyncTests(unittest.TestCase):
 
 
 class WirePrivacyTests(unittest.TestCase):
+    def test_downloaded_reasoning_totals_are_still_strictly_validated(self):
+        import io
+        from splitrail_desktop.activity import parse_collector_stream
+        from test_activity import fixture, local_zone
+        with local_zone('UTC'):
+            baseline = encode_dataset(parse_collector_stream(
+                io.BytesIO(json.dumps(fixture()).encode())), 'a' * 32, 'all')
+        for level in ('daily', 'model', 'hourly'):
+            with self.subTest(level=level):
+                candidate = copy.deepcopy(baseline)
+                row = (candidate['days'][0] if level == 'daily' else
+                       candidate['days'][0]['models'][0] if level == 'model' else
+                       candidate['hours'][0])
+                row['tokens'].update(output=5, reasoning=12, reasoning_in_output=12)
+                with self.assertRaisesRegex(ValueError, 'Invalid reasoning totals'):
+                    decode_dataset(candidate)
+
     def test_roundtrip_and_unknown_names_are_pseudonymized(self):
         payload = encode_dataset(collector_fixture(), 'a' * 32, 'all')
         raw = json.dumps(payload)

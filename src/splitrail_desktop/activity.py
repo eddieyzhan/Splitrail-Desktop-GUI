@@ -61,6 +61,12 @@ def _hours(groups, analyzer, overrides):
         total = TokenUsage()
         for detail in details:
             total += detail.tokens
+        if total.reasoning_in_output > total.output:
+            # Some collector histories have inconsistent optional hourly counts.
+            # Keep authoritative daily/model totals and the other valid hours;
+            # never invent a correction or let this detail block device sync.
+            # The chart's coverage check reports the missing hourly detail.
+            continue
         row = DailyUsage(analyzer, day, 0, 0, 0, total, sum(d.cost for d in details),
                          0, {}, tuple(d for d in details if d.name))
         priced, _, _ = reprice_dataset(UsageDataset((row,), {}), overrides)

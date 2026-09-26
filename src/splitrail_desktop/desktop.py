@@ -362,7 +362,7 @@ class DesktopController(QObject):
             timed_cost = sum(bucket.total.cost for bucket in buckets)
             if timed_tokens != total.tokens.total or abs(timed_cost-total.cost) > max(.02, total.cost*.001):
                 self._notice('hourly', 'Some usage has no hourly detail',
-                             'The chart shows timestamped usage only. Daily-only imports and older device snapshots remain in your totals. Refresh each device to add hourly detail.')
+                             'Your totals include usage with missing or inconsistent hourly detail. The chart shows only usable hourly data. Refresh each device to add available detail.')
             if not any(row.day == start for row in self.dataset.hours) and (total.tokens.total or total.cost):
                 self._state['chartEmpty'] = 'Hourly detail isn’t available for this usage'
         else:

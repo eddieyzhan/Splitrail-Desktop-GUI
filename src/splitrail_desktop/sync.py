@@ -215,7 +215,14 @@ def _collect(config: dict) -> dict:
         raise SyncError('All tools sync could not read local usage. ' + detail) from exc
     except OSError as exc:
         raise SyncError('Local usage files could not be read. Check file access and try Sync again.') from exc
-    return encode_dataset(dataset, config['device'], config['scope'])
+    try:
+        return encode_dataset(dataset, config['device'], config['scope'])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise SyncError(
+            'Local usage totals failed validation. No usage was uploaded. '
+            'Refresh usage and try Sync again. If this continues, update '
+            'Splitrail Desktop and the usage collector.'
+        ) from exc
 
 
 def cached_devices(directory: Path | None = None) -> dict[str, dict]:

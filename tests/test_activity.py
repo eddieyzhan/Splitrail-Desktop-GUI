@@ -56,6 +56,19 @@ def fixture():
         'messages': records, 'analyzer_name': 'Codex CLI', 'num_conversations': 1}]}
 
 
+def inconsistent_reasoning_fixture(analyzer_name='Antigravity CLI'):
+    payload = fixture()
+    analyzer = payload['analyzer_stats'][0]
+    analyzer['analyzer_name'] = analyzer_name
+    # Daily/model totals are consistent, but the optional 02:00 detail claims
+    # more included reasoning than output. The other hour remains usable.
+    for record, output, reasoning, cost in zip(
+            analyzer['messages'], (5, 5, 110), (12, 12, 6), (.01, .01, .28)):
+        record['stats'] = dict(record['stats'], outputTokens=output,
+                               reasoningTokens=reasoning, cost=cost)
+    return payload
+
+
 class HourlyUsageTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -94,6 +107,30 @@ class HourlyUsageTests(unittest.TestCase):
         dataset = self.parse(payload)
         self.assertEqual(dataset.days[0].tokens.total, 480)
         self.assertEqual(sum(h.tokens.total for h in dataset.hours), 160)
+
+    def test_inconsistent_hourly_reasoning_keeps_daily_totals_and_valid_hours(self):
+        for analyzer in ('Antigravity CLI', 'Codex CLI', 'Gemini CLI'):
+            with self.subTest(analyzer=analyzer):
+                payload = inconsistent_reasoning_fixture(analyzer)
+                daily_only = copy.deepcopy(payload)
+                daily_only['analyzer_stats'][0]['messages'] = []
+                dataset = self.parse(payload)
+                self.assertEqual(dataset.days, self.parse(daily_only).days)
+                self.assertEqual(dataset.days[0].tokens.output, 120)
+                self.assertEqual(dataset.days[0].tokens.reasoning, 30)
+                self.assertEqual(dataset.days[0].cost, .3)
+                if analyzer == 'Gemini CLI':
+                    # Separate reasoning can legitimately exceed output.
+                    self.assertEqual([h.hour for h in dataset.hours], [2, 14])
+                    self.assertEqual(dataset.hours[0].tokens.reasoning, 24)
+                else:
+                    self.assertEqual([h.hour for h in dataset.hours], [14])
+                    self.assertEqual(dataset.hours[0].tokens.output, 110)
+                    self.assertEqual(dataset.hours[0].tokens.reasoning, 6)
+                    self.assertEqual(dataset.hours[0].cost, .28)
+                uploaded = encode_dataset(dataset, 'a' * 32, 'all')
+                self.assertEqual(decode_dataset(uploaded).days, dataset.days)
+                self.assertEqual(decode_dataset(uploaded).hours, dataset.hours)
 
     def test_user_records_do_not_add_usage(self):
         payload = fixture()
