@@ -199,7 +199,7 @@ Item {
                     ColumnLayout {
                         id:bankContent;anchors.fill:parent;anchors.margins:20;spacing:12
                         RowLayout{Layout.fillWidth:true;TextLabel{text:"Banked resets";font.pixelSize:15;font.weight:Font.DemiBold;Layout.fillWidth:true}TextLabel{objectName:"bankedResetCount";text:q.banks>=0 ? q.banks+" available" : "Unavailable";font.pixelSize:12;color:AppStyle.muted}}
-                        TextLabel{visible:q.banksStale;Layout.fillWidth:true;text:"Last known · "+q.banksAge;font.pixelSize:11;color:AppStyle.muted}
+                        TextLabel{visible:!!q.banksStale;Layout.fillWidth:true;text:"Last known · "+q.banksAge;font.pixelSize:11;color:AppStyle.muted}
                         Repeater {
                             model:q.expiries || []
                             delegate:RowLayout {

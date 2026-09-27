@@ -132,6 +132,14 @@ class QmlTests(QtCase):
         QMetaObject.invokeMethod(control, 'clicked')
         self.assertFalse(c.guardState['processes'][0]['protected'])
 
+    def test_quota_page_opens_before_first_quota_read(self):
+        self.controller.finishSetup()
+        self.assertIsNone(self.controller.quota_snapshot)
+        self.item('dashboardView').setProperty('page', 'Quota')
+        QTest.qWait(50)
+        self.assertEqual(self.item('bankedResetCount').property('text'), 'Unavailable')
+        self.assertEqual(self.item('quotaCurrentLimit').property('text'), '95')
+
     def test_quota_page_names_codex_and_shows_exact_banked_expiries(self):
         self.dashboard()
         expiry = datetime(2026, 10, 1, 4, 5, 6, tzinfo=timezone.utc)
