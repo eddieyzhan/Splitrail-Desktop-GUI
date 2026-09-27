@@ -37,7 +37,7 @@ def main() -> int:
     executable = (bundle / 'Contents/MacOS/Splitrail' if sys.platform == 'darwin'
                   else bundle / ('Splitrail.exe' if sys.platform == 'win32' else 'Splitrail'))
     for arguments in (['--self-check'], ['--smoke-ui'], ['--smoke-ui', '--onboarding'],
-                      ['--smoke-ui', '--quota']):
+                      ['--smoke-ui', '--quota'], ['--smoke-ui', '--limits']):
         subprocess.run([str(executable), *arguments], cwd=native, timeout=45, check=True)
 
     # Keep notices alongside the bundle so macOS's ad-hoc signature stays intact.

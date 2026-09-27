@@ -6,7 +6,7 @@ The **Codex usage tracker works on its own**. Tracking other tools requires the 
 
 [Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
 
-The quota cutoff and process monitor are new in **1.2.0**. Until a 1.2.0 binary is published, use the [source installation](#run-from-source-or-contribute) for these features; older release downloads do not contain them.
+The dedicated **Limits** page is new in **1.2.1**. Until a 1.2.1 binary is published, use the [source installation](#run-from-source-or-contribute) for these controls; older release downloads do not contain them.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -68,20 +68,20 @@ On Windows run `.\Splitrail\Splitrail.exe --demo`; on macOS run `/Applications/S
 
 ## Codex weekly usage limits and reset protection
 
-![Codex weekly quota cutoff set to 95 percent, a 5 percent limit after reset, and selected local processes; synthetic demo data](docs/quota.png)
+![Simple Codex Limits page with a 95 percent weekly cutoff, 5 percent after reset, hover help and local process selection; synthetic demo data](docs/limits.png)
 
-Want to leave Codex running without using your entire weekly allowance? Open **Quota → Weekly usage cutoff**:
+Open **Limits** in the sidebar. Hover over an **ⓘ** icon for details; keyboard focus works too. **Quota** remains a separate page for allowance and reset information.
 
-1. Check **Open Codex processes** and select the engines to protect. The list distinguishes native CLI sessions, CLI tasks and app servers, with exact process IDs and local paths.
-2. Set **Stop at % used**, for example **95**. At 75% used, this leaves 20 percentage points before the cutoff.
-3. Set **After a reset, stop at % used**, for example **5**. If a scheduled or unexpected reset is detected, the cutoff becomes 5% of the fresh allowance, including usage already spent since that reset.
-4. Choose whether to also protect newly opened Codex processes, then select **Arm cutoff**. This authorizes termination of the selected engines. Disarm before changing limits or restarting blocked processes.
+1. Select the Codex engines to protect under **Processes**.
+2. Set **Stop at**, for example **95%**. A reading at or above 95% triggers the cutoff, including 96% or 97%.
+3. Set **After reset**, for example **5%** of the fresh allowance.
+4. Choose **Include new processes** if wanted, then **Enable cutoff**. Disable it before changing limits or restarting blocked processes.
 
 The cutoff starts **off** on each app launch. Percentages are remembered locally. A detected usage decrease or changed weekly reset window activates the reset limit, which stays in force until disarmed. Once a cutoff triggers, it stays blocked; a later reset does not silently restart work. Splitrail never redeems your banked reset credits.
 
 **This is a best-effort local cutoff, not a provider-enforced spending cap.** Quota checks run once per minute, and reporting delays or requests already in flight can exceed your chosen percentage. Leave headroom. If fresh quota is unavailable for two minutes, the guard stops protected processes. An app server can contain several conversations, all of which may be interrupted. The process list cannot reliably tell which chat is generating. Only the quota tool's account is measured; processes cannot automatically be matched to accounts. Cloud tasks, other computers, inaccessible processes and independent tool commands are outside the cutoff.
 
-Process scans run every ten seconds only while the Quota page is visible or the guard is armed. They inspect process metadata without reading session histories or continuously sampling CPU usage. Closing Splitrail disables protection. [Detection, stopping and platform details](docs/REFERENCE.md#codex-process-monitor-and-quota-cutoff).
+Process scans run every ten seconds only while the Limits page is visible or the guard is armed. They inspect process metadata without reading session histories or continuously sampling CPU usage. Closing Splitrail disables protection. [Detection, stopping and platform details](docs/REFERENCE.md#codex-process-monitor-and-quota-cutoff).
 
 ## Sync usage between computers (optional)
 
@@ -116,7 +116,7 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 | Linux desktop launch cannot find installed tools | The app also checks `~/.local/bin`, `~/.cargo/bin`, `~/.npm-global/bin` and `/usr/local/bin`, even when the desktop session has an older `PATH`. Existing `PATH` entries keep priority. Custom install locations must be on the desktop's `PATH`; you can also set `SPLITRAIL_BIN` to the collector executable. |
 | Codex quotas are unavailable | Quota monitoring uses optional tools with their own authentication. It is separate from usage tracking. [Setup details](docs/REFERENCE.md#optional-quota-monitoring). |
 | Cannot arm a cutoff | Refresh quota successfully first. The weekly reading needs a recent source timestamp and a future reset time. Select a process or enable protection for newly opened processes. Demo mode cannot arm cutoffs. |
-| Codex closes after reaching a limit | Open **Quota**, inspect the cutoff status, then **Disarm cutoff** before restarting. A still-armed, triggered guard also stops new engines when that option is enabled. |
+| Codex closes after reaching a limit | Open **Limits**, hover over the status **ⓘ** for the reason, then **Disable cutoff** before restarting. A still-enabled, triggered guard also stops new engines when that option is enabled. |
 
 For bug reports, include your OS, Python version, app version and the error message. Do not attach raw session logs, credentials or real-account screenshots. See [Privacy](PRIVACY.md).
 

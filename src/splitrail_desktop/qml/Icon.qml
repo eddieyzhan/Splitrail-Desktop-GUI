@@ -18,6 +18,8 @@ Canvas {
         else if(name==="calendar") { c.strokeRect(4,5,16,16);path([[4,10],[20,10]]);path([[8,3],[8,7]]);path([[16,3],[16,7]]);circle(9,15,1,true);circle(15,15,1,true) }
         else if(name==="chart") { path([[4,19],[4,11]]);path([[10,19],[10,5]]);path([[16,19],[16,9]]);path([[22,19],[22,3]]) }
         else if(name==="quota") { circle(12,12,9,false);path([[12,3],[12,12],[19,17]]) }
+        else if(name==="limits") {path([[5,7],[19,7]]);path([[5,17],[19,17]]);circle(9,7,3,false);circle(15,17,3,false)}
+        else if(name==="info") {circle(12,12,9,false);circle(12,7,1,true);path([[12,11],[12,17]])}
         else if(name==="settings") { circle(12,12,3,false);circle(12,12,7,false);for(let a=0;a<6;a++){let t=a*Math.PI/3;path([[12+7*Math.cos(t),12+7*Math.sin(t)],[12+10*Math.cos(t),12+10*Math.sin(t)]])} }
         else if(name==="bell") { c.beginPath(); c.moveTo(5,17);c.lineTo(7,13);c.lineTo(7,8);c.bezierCurveTo(7,1,17,1,17,8);c.lineTo(17,13);c.lineTo(19,17);c.closePath();c.stroke();path([[10,21],[14,21]]) }
         else if(name==="refresh") { c.beginPath();c.arc(12,12,8,.5,5.2);c.stroke();path([[15,3],[17,6],[20,3]]) }

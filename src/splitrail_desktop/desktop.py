@@ -59,7 +59,7 @@ class DesktopController(QObject):
     completed = Signal(str, object, object, int)
     setupEvent = Signal(str, str, int)
 
-    def __init__(self, *, demo=False, onboarding=False, auto_refresh=True, codex_usage=False, quota_page=False):
+    def __init__(self, *, demo=False, onboarding=False, auto_refresh=True, codex_usage=False, quota_page=False, limits_page=False):
         super().__init__()
         self.demo = demo
         self.closed = False
@@ -116,7 +116,7 @@ class DesktopController(QObject):
             mode = 'combined' if collector else 'codex'
         self._state = {
             'appVersion': __version__,
-            'initialPage': 'Quota' if quota_page else 'Overview',
+            'initialPage': 'Limits' if limits_page else 'Quota' if quota_page else 'Overview',
             'theme': prefs.get('theme', 'Pearl'), 'onboarding': bool(onboarding or (not prefs.get('onboarded') and not demo)),
             'setupStage': 'welcome', 'setupError': '', 'setupBusy': False, 'setupLogin': '', 'setupCode': '',
             'ghAvailable': bool(shutil.which('gh')), 'repoName': 'splitrail-usage', 'repoExisting': False,

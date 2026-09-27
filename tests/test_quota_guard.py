@@ -29,6 +29,15 @@ class QuotaGuardTests(unittest.TestCase):
         guard.disarm()
         self.assertFalse(guard.blocked)
 
+    def test_reading_above_cutoff_still_stops(self):
+        for used in (95, 96, 97, 100):
+            with self.subTest(used=used):
+                guard = QuotaGuard()
+                guard.arm(QuotaLimits(95, 5), snapshot(94), NOW)
+                now = NOW + timedelta(seconds=60)
+                guard.observe(snapshot(used, now), now)
+                self.assertTrue(guard.blocked)
+
     def test_unexpected_reset_with_unchanged_deadline_switches_to_five(self):
         guard = QuotaGuard()
         guard.arm(QuotaLimits(), snapshot(), NOW)

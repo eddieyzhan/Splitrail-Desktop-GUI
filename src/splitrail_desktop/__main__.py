@@ -16,7 +16,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--smoke-ui", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--codex-usage", action="store_true", help="Show deduplicated Codex usage across devices")
-    parser.add_argument("--quota", action="store_true", help="Open Codex quota, process monitor and cutoff controls")
+    pages = parser.add_mutually_exclusive_group()
+    pages.add_argument("--quota", action="store_true", help="Open Codex quota details")
+    pages.add_argument("--limits", action="store_true", help="Open Codex cutoff controls and process monitor")
     parser.add_argument("--export-usage", metavar="FILE", help="Export this computer's Codex usage (.json.gz recommended)")
     parser.add_argument("--import-usage", metavar="FILE", help="Merge a Codex usage export; repeat imports are safe")
     parser.add_argument("--setup-sync", metavar="OWNER/REPO", help="Configure a private GitHub repository for device sync")
@@ -70,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         import ijson  # Validate the streaming dependency before opening the GUI.
         from .qt_app import run
         return run(demo=args.demo, onboarding=args.onboarding, smoke=args.smoke_ui,
-                   codex_usage=args.codex_usage, quota_page=args.quota)
+                   codex_usage=args.codex_usage, quota_page=args.quota, limits_page=args.limits)
     except ImportError as exc:
         if not any(name in str(exc) for name in ('PySide6', 'ijson', 'psutil')):
             raise

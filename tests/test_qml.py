@@ -103,7 +103,7 @@ class QmlTests(QtCase):
         dashboard = self.dashboard()
         now = datetime.now(timezone.utc)
         self.controller.quota_snapshot = guard_snapshot(now=now, reset=now+timedelta(days=3))
-        dashboard.setProperty('page', 'Quota')
+        dashboard.setProperty('page', 'Limits')
         QTest.qWait(50)
         self.item('quotaCurrentLimit').setProperty('text', '92.5')
         self.item('quotaResetLimit').setProperty('text', '4')
@@ -113,14 +113,14 @@ class QmlTests(QtCase):
             self.assertTrue(self.controller.guardState['armed'])
             self.assertEqual(self.controller.guardState['activeLimit'], 92.5)
             self.assertFalse(self.item('quotaCurrentLimit').property('enabled'))
-            self.assertEqual(self.item('armQuotaGuard').property('text'), 'Disarm cutoff')
+            self.assertEqual(self.item('armQuotaGuard').property('text'), 'Disable cutoff')
             QMetaObject.invokeMethod(self.item('armQuotaGuard'), 'clicked')
             QTest.qWait(30)
             self.assertFalse(self.controller.guardState['armed'])
 
     def test_process_rows_show_identity_and_selection(self):
         dashboard = self.dashboard()
-        dashboard.setProperty('page', 'Quota')
+        dashboard.setProperty('page', 'Limits')
         QTest.qWait(50)
         c = self.controller
         c._processes = (CodexProcess(123, 1000, '/example/bin/codex', '/example/project', 'CLI session', 'sleeping'),)
@@ -131,6 +131,9 @@ class QmlTests(QtCase):
         control.setProperty('checked', False)
         QMetaObject.invokeMethod(control, 'clicked')
         self.assertFalse(c.guardState['processes'][0]['protected'])
+        details = self.item('processInfo-0').property('explanation')
+        self.assertIn('/example/bin/codex', details)
+        self.assertIn('sleeping', details)
 
     def test_quota_page_opens_before_first_quota_read(self):
         self.controller.finishSetup()
@@ -138,7 +141,43 @@ class QmlTests(QtCase):
         self.item('dashboardView').setProperty('page', 'Quota')
         QTest.qWait(50)
         self.assertEqual(self.item('bankedResetCount').property('text'), 'Unavailable')
+        self.assertIsNone(self.window.findChild(QObject, 'armQuotaGuard'))
+        self.assertFalse(self.controller._process_view_visible)
+        self.click('navigationLimits')
         self.assertEqual(self.item('quotaCurrentLimit').property('text'), '95')
+        self.assertFalse(self.item('dateSelector').property('visible'))
+        self.assertTrue(self.controller._process_view_visible)
+        self.click('navigationQuota')
+        self.assertFalse(self.controller._process_view_visible)
+
+    def test_limits_tooltips_work_on_hover_and_keyboard_in_both_themes(self):
+        self.dashboard()
+        self.click('navigationLimits')
+        for theme in ('Pearl', 'Nord'):
+            self.controller.setTheme(theme)
+            for width in (960, 1280):
+                self.window.resize(width, 700)
+                QTest.qWait(30)
+                button = self.item('resetLimitInfo')
+                pos = button.mapToScene(QPointF(button.width()/2, button.height()/2)).toPoint()
+                QTest.mouseMove(self.window, pos)
+                QTest.qWait(400)
+                tooltip = self.item('resetLimitInfoTooltip')
+                self.assertTrue(tooltip.property('visible'))
+                self.assertIn('5% of the fresh allowance', tooltip.property('text'))
+                QTest.mouseMove(self.window, QPointF(10, 10).toPoint())
+                QTest.qWait(200)
+                self.assertFalse(tooltip.property('visible'))
+                button.forceActiveFocus()
+                QTest.qWait(30)
+                self.assertTrue(tooltip.property('visible'))
+                QTest.keyClick(self.window, Qt.Key_Escape)
+                QTest.qWait(200)
+                self.assertFalse(tooltip.property('visible'))
+                action = self.item('armQuotaGuard')
+                corner = action.mapToScene(QPointF(action.width(), action.height()))
+                self.assertLessEqual(corner.x(), width)
+                self.assertLessEqual(corner.y(), 700)
 
     def test_quota_page_names_codex_and_shows_exact_banked_expiries(self):
         self.dashboard()
@@ -247,7 +286,7 @@ class QmlTests(QtCase):
         dashboard = self.dashboard()
         for theme in ('Pearl', 'Nord'):
             self.controller.setTheme(theme)
-            for page in ('Models', 'Tools', 'History', 'Quota', 'Settings', 'Overview'):
+            for page in ('Models', 'Tools', 'History', 'Quota', 'Limits', 'Settings', 'Overview'):
                 dashboard.setProperty('page', page)
                 QTest.qWait(60)
             for name in ('datePicker', 'priceEditor', 'notificationsPopup'):

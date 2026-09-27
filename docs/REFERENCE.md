@@ -30,9 +30,9 @@ If `quota-axi` is on your PATH, the app runs `quota-axi --provider codex --full 
 
 ## Codex process monitor and quota cutoff
 
-The **Quota** page lists accessible native `codex` / `codex.exe` engines owned by the current OS user. Each row shows a PID, start time, executable path, working directory, engine type and OS status. Wrapper processes, Codex helper hosts and Splitrail's own read-only quota subprocesses are excluded. WSL, containers, remote hosts and inaccessible processes may require Splitrail to run in the same environment as Codex. OS status describes the process, not chat activity; an app server can host multiple chats. Arbitrary shell commands and conversation text are not shown.
+The **Limits** page contains cutoff controls and accessible native `codex` / `codex.exe` engines owned by the current OS user. Rows show the folder, engine type and PID; hover over the row's **ⓘ** for its full paths, start time and OS status. Info icons also support keyboard focus. **Quota** remains a separate page for allowance and reset information. Wrapper processes, Codex helper hosts and Splitrail's own read-only quota subprocesses are excluded. WSL, containers, remote hosts and inaccessible processes may require Splitrail to run in the same environment as Codex. OS status describes the process, not chat activity; an app server can host multiple chats. Arbitrary shell commands and conversation text are not shown.
 
-**Arm cutoff** authorizes termination of the selected engines while this instance of Splitrail is open. New engines are covered only if **Also protect newly opened Codex processes** is checked. With that option off, protection is bound to the selected PID and start time; a replacement process is not silently adopted. Before each stop, the app rechecks process ownership, executable and start time to avoid signalling a reused PID. Unix uses `SIGTERM`; Windows uses process termination. Splitrail does not force-kill a Unix engine that ignores the signal: it reports the failure and retries during subsequent process checks. It does not terminate arbitrary tool/shell descendants, which may continue independently.
+**Enable cutoff** authorizes termination of the selected engines while this instance of Splitrail is open. New engines are covered only if **Include new processes** is checked. With that option off, protection is bound to the selected PID and start time; a replacement process is not silently adopted. Before each stop, the app rechecks process ownership, executable and start time to avoid signalling a reused PID. Unix uses `SIGTERM`; Windows uses process termination. Splitrail does not force-kill a Unix engine that ignores the signal: it reports the failure and retries during subsequent process checks. It does not terminate arbitrary tool/shell descendants, which may continue independently.
 
 Both limits are absolute percentages of the weekly allowance, from 0 to 100. The current limit applies immediately, including when usage is already at or above it. A newer fresh reading with lower usage, a different weekly window ID, a reset deadline changed by more than one minute, or a rollover past the previous deadline switches to the after-reset limit. This also covers observed unexpected resets with unchanged deadlines. The reset limit remains active through further resets until disarmed. Reset detection is based on observable quota changes: a reset followed by enough usage to hide the decrease between polls, with an unchanged deadline, cannot be identified reliably.
 
@@ -69,6 +69,7 @@ The commands below run from a source checkout. For the downloaded application, r
 ```bash
 python3 splitrail-desktop --codex-usage
 python3 splitrail-desktop --quota
+python3 splitrail-desktop --limits
 python3 splitrail-desktop --export-usage usage.json.gz
 python3 splitrail-desktop --import-usage usage.json.gz
 python3 splitrail-desktop --setup-sync OWNER/REPO --sync-codex-only

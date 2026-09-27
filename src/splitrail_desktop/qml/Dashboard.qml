@@ -7,7 +7,8 @@ Item {
     property var s: bridge.state
     property var clock: bridge.clock
     property var q: clock.quota
-    property string page: s.initialPage
+    property string page: "Overview"
+    Component.onCompleted: page = s.initialPage
     property string query: ""
     readonly property bool settingsPage: page==="Settings"
     RowLayout {
@@ -20,8 +21,9 @@ Item {
                     Rectangle { width: 29; height: 29; radius: 10; color: AppStyle.accent; Icon {name:"logo";color:AppStyle.accentInk;anchors.centerIn:parent;width:20;height:20} }
                     TextLabel { text:"Splitrail";font.pixelSize:19;font.weight:Font.DemiBold;font.letterSpacing:-.7 }
                 }
-                Repeater { model: [{title:"Overview",iconName:"grid"},{title:"Models",iconName:"models"},{title:"Tools",iconName:"tools"},{title:"History",iconName:"calendar"},{title:"Quota",iconName:"quota"}]; delegate: Button {
+                Repeater { model: [{title:"Overview",iconName:"grid"},{title:"Models",iconName:"models"},{title:"Tools",iconName:"tools"},{title:"History",iconName:"calendar"},{title:"Quota",iconName:"quota"},{title:"Limits",iconName:"limits"}]; delegate: Button {
                     required property var modelData
+                    objectName: "navigation" + modelData.title
                     Accessible.name: modelData.title
                     Layout.fillWidth: true; implicitHeight: 43
                     onClicked: {dashboard.page=modelData.title;dashboard.query=""}
@@ -49,21 +51,21 @@ Item {
             Layout.fillWidth:true;Layout.fillHeight:true;Layout.margins:dashboard.width<1100 ? 24 : 36;spacing:24
             RowLayout {
                 Layout.fillWidth:true;spacing:12
-                ColumnLayout {spacing:6;TextLabel {text:dashboard.page;font.pixelSize:28;font.weight:Font.DemiBold;font.letterSpacing:-1}TextLabel {text:dashboard.settingsPage ? "Make it yours." : s.busy ? "Updating your usage…" : clock.refreshAge;color:AppStyle.muted;font.pixelSize:12}}
+                ColumnLayout {spacing:6;TextLabel {text:dashboard.page;font.pixelSize:28;font.weight:Font.DemiBold;font.letterSpacing:-1}TextLabel {text:dashboard.settingsPage ? "Make it yours." : dashboard.page==="Limits" ? "Codex" : s.busy ? "Updating your usage…" : clock.refreshAge;color:AppStyle.muted;font.pixelSize:12}}
                 Item { Layout.fillWidth: true }
                 SoftButton {
-                    visible: bridge.guardState.armed; compact: true; tone: "ghost"
+                    visible: bridge.guardState.armed && dashboard.page!=="Limits"; compact: true; tone: "ghost"
                     text: bridge.guardState.blocked ? "Cutoff reached" : "Cutoff " + bridge.guardState.activeLimit + "%"
-                    onClicked: dashboard.page = "Quota"
+                    onClicked: dashboard.page = "Limits"
                 }
-                SoftButton {objectName:"refreshButton";iconName:"refresh";tone:"ghost";visible:!dashboard.settingsPage;enabled:!s.busy && !s.quotaBusy && !s.syncBusy;accessibleName:"Refresh usage";onClicked:bridge.refresh()}
+                SoftButton {objectName:"refreshButton";iconName:"refresh";tone:"ghost";visible:!dashboard.settingsPage;enabled:!s.quotaBusy && (dashboard.page==="Limits" || (!s.busy && !s.syncBusy));accessibleName:dashboard.page==="Limits" ? "Refresh quota" : "Refresh usage";onClicked:dashboard.page==="Limits" ? bridge.refreshQuota() : bridge.refresh()}
                 Item {width:38;height:40
                     SoftButton {objectName:"notificationsButton";anchors.fill:parent;iconName:"bell";tone:"ghost";accessibleName:"Notifications";onClicked:notifications.open()}
                     Rectangle{visible:s.notifications.length>0;width:6;height:6;radius:3;color:AppStyle.accent;anchors.right:parent.right;anchors.rightMargin:5;anchors.top:parent.top;anchors.topMargin:5}
                 }
             }
             RowLayout {
-                visible:!dashboard.settingsPage && dashboard.page!=="Quota";Layout.fillWidth:true;spacing:8
+                visible:!dashboard.settingsPage && dashboard.page!=="Quota" && dashboard.page!=="Limits";Layout.fillWidth:true;spacing:8
                 TextLabel {text:s.range+(s.hasUsage && s.displayedMode!==s.usageMode ? "  ·  Previous "+({combined:"All devices",local:"This device",codex:"Codex"})[s.displayedMode]+" data" : "");font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
                 SoftButton{objectName:"previousPeriod";iconName:"left";tone:"ghost";compact:true;enabled:s.canPrevious;accessibleName:"Previous time frame";onClicked:bridge.cyclePeriod(-1)}
                 Segmented {objectName:"periodTabs";options:["Today","Week","Month","Year","All time"];selected:["Day","Week","Month","Year","All time"].indexOf(s.preset);onChosen:function(i){bridge.choosePeriod(["Day","Week","Month","Year","All time"][i])}}
@@ -72,7 +74,7 @@ Item {
             }
             Loader {
                 id: content;Layout.fillWidth:true;Layout.fillHeight:true
-                sourceComponent: dashboard.settingsPage ? settings : dashboard.page==="Overview" ? overview : dashboard.page==="Quota" ? quotaPage : tablePage
+                sourceComponent: dashboard.settingsPage ? settings : dashboard.page==="Overview" ? overview : dashboard.page==="Quota" ? quotaPage : dashboard.page==="Limits" ? limitsPage : tablePage
             }
         }
     }
@@ -193,7 +195,6 @@ Item {
                         TextLabel {text:q.available ? "Resets "+q.reset+"  ·  "+q.countdown : "Install quota-axi to display your Codex allowance.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
                     }
                 }
-                QuotaGuardPanel {Layout.fillWidth:true}
                 Rectangle {
                     Layout.fillWidth:true;Layout.preferredHeight:bankContent.implicitHeight+40;radius:20;color:AppStyle.surface
                     ColumnLayout {
@@ -217,6 +218,7 @@ Item {
             }
         }
     }
+    Component{id:limitsPage;LimitsPage{}}
     Component{id:settings;SettingsPage{onPricingRequested:pricing.open()}}
     DatePicker{id:dates}
     PriceEditor{id:pricing}
