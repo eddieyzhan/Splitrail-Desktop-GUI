@@ -6,6 +6,8 @@ Splitrail Desktop has no telemetry, analytics, crash reporting, hosted backend, 
 
 The dashboard reads local usage and optional quota tools. To show hourly charts, it streams normalized per-request statistics from the collector and keeps only timestamp/token/cost aggregates. Session names, project metadata, request identities and unexpected conversation content are discarded in memory; per-request collector records are never written to disk. Source logs remain untouched. Local exports and settings stay on your computer until you choose to share them.
 
+The optional Codex process monitor reads local OS process metadata, including PID, owner, executable, start time, working directory and status. It briefly inspects command arguments to classify the engine, but never retains or displays arguments. Process details and cutoff selections remain in memory and are never exported or synced. Only the chosen cutoff percentages are saved in local preferences. Arming a cutoff explicitly authorizes terminating protected local Codex engines; it starts off each time the app opens. Quota readings remain local and the app never consumes reset credits.
+
 ## Optional GitHub sync
 
 Connecting GitHub and enabling data sharing are explicit actions. GitHub CLI handles authentication; its browser flow shows a one-time code, never an access token, in the app. The app neither reads credential files nor calls `gh auth token`. GitHub CLI may use a plaintext credential fallback where an OS credential store is unavailable; consult its documentation.

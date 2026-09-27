@@ -36,7 +36,8 @@ def main() -> int:
     bundle = native / ('Splitrail.app' if sys.platform == 'darwin' else 'Splitrail')
     executable = (bundle / 'Contents/MacOS/Splitrail' if sys.platform == 'darwin'
                   else bundle / ('Splitrail.exe' if sys.platform == 'win32' else 'Splitrail'))
-    for arguments in (['--self-check'], ['--smoke-ui'], ['--smoke-ui', '--onboarding']):
+    for arguments in (['--self-check'], ['--smoke-ui'], ['--smoke-ui', '--onboarding'],
+                      ['--smoke-ui', '--quota']):
         subprocess.run([str(executable), *arguments], cwd=native, timeout=45, check=True)
 
     # Keep notices alongside the bundle so macOS's ad-hoc signature stays intact.
@@ -50,7 +51,7 @@ def main() -> int:
     shutil.copyfile(ROOT / 'docs/THIRD_PARTY.md', staging / 'THIRD_PARTY.md')
     notices = staging / 'licenses'
     shutil.copytree(ROOT / 'docs/licenses', notices)
-    for package in ('PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6', 'ijson'):
+    for package in ('PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6', 'ijson', 'psutil'):
         dist = distribution(package)
         for path in dist.files or []:
             if '.dist-info/licenses/' in str(path).replace('\\', '/'):

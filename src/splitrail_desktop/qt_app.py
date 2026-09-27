@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 
-def run(*, demo=False, onboarding=False, smoke=False, codex_usage=False) -> int:
+def run(*, demo=False, onboarding=False, smoke=False, codex_usage=False, quota_page=False) -> int:
     from .platform_support import prepare_qt
     prepare_qt()
     from PySide6.QtCore import QTimer, QUrl
@@ -32,7 +32,9 @@ def run(*, demo=False, onboarding=False, smoke=False, codex_usage=False) -> int:
             data = Path(stack.enter_context(tempfile.TemporaryDirectory()))
             for target in ('splitrail_desktop.portable.data_dir', 'splitrail_desktop.sync.data_dir'):
                 stack.enter_context(patch(target, return_value=data))
-        controller = DesktopController(demo=demo or smoke, onboarding=onboarding, auto_refresh=not (demo or smoke), codex_usage=codex_usage)
+        controller = DesktopController(demo=demo or smoke, onboarding=onboarding,
+                                       auto_refresh=not (demo or smoke), codex_usage=codex_usage,
+                                       quota_page=quota_page)
         directory = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix='splitrail-ui-')))
         for resource in files('splitrail_desktop').joinpath('qml').iterdir():
             if resource.is_file():

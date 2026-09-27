@@ -1,10 +1,12 @@
-# Splitrail Desktop GUI
+# Splitrail Desktop GUI — Codex Quota & AI Usage Monitor
 
-**Track token usage and estimated costs for Codex CLI, Claude Code, Gemini CLI and other AI coding tools in one desktop dashboard.** See daily trends and model breakdowns, customize model prices and optionally combine usage from multiple computers through your own private GitHub repository.
+**Monitor open Codex processes, set weekly usage cutoffs, and track AI coding token usage in one desktop dashboard.** Reserve part of your Codex allowance with a limit such as **95% used**, and switch to a separate limit such as **5% after a reset**. Track estimated costs for Codex CLI, Claude Code, Gemini CLI and other tools, with optional private GitHub sync across computers.
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Connect devices](#sync-usage-between-computers-optional) · [Troubleshooting](#troubleshooting) · [Privacy](PRIVACY.md)
+[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
+
+The quota cutoff and process monitor are new in **1.2.0**. Until a 1.2.0 binary is published, use the [source installation](#run-from-source-or-contribute) for these features; older release downloads do not contain them.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -16,6 +18,8 @@ The **Codex usage tracker works on its own**. Tracking other tools requires the 
 | Claude Code, Gemini CLI and other supported tools | [Splitrail 3.9.1 or newer](https://github.com/Piebald-AI/splitrail#installation), available on your PATH. Supported sources depend on the collector. |
 | Combined usage across computers | Optional GitHub CLI sign-in and a private repository you control. Each device chooses **All tools** or **Codex** as its source. |
 | Codex quota display | Optional `quota-axi`; missing quota tools do not block token tracking or sync. [Quota details](docs/REFERENCE.md#optional-quota-monitoring). |
+| Open Codex CLI / app-server processes | Built-in local process monitor: PID, start time, executable, working directory and OS status. |
+| Codex weekly quota cutoff and reset protection | Fresh weekly data from `quota-axi`, selected local Codex processes, and an explicitly armed cutoff. Keep Splitrail open. |
 
 Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server or telemetry. **Costs are estimates, not provider bills or subscription charges.** The bundled price catalogue is an offline snapshot, and you can override rates locally.
 
@@ -62,6 +66,23 @@ On Windows run `.\Splitrail\Splitrail.exe --demo`; on macOS run `/Applications/S
 
 </details>
 
+## Codex weekly usage limits and reset protection
+
+![Codex weekly quota cutoff set to 95 percent, a 5 percent limit after reset, and selected local processes; synthetic demo data](docs/quota.png)
+
+Want to leave Codex running without using your entire weekly allowance? Open **Quota → Weekly usage cutoff**:
+
+1. Check **Open Codex processes** and select the engines to protect. The list distinguishes native CLI sessions, CLI tasks and app servers, with exact process IDs and local paths.
+2. Set **Stop at % used**, for example **95**. At 75% used, this leaves 20 percentage points before the cutoff.
+3. Set **After a reset, stop at % used**, for example **5**. If a scheduled or unexpected reset is detected, the cutoff becomes 5% of the fresh allowance, including usage already spent since that reset.
+4. Choose whether to also protect newly opened Codex processes, then select **Arm cutoff**. This authorizes termination of the selected engines. Disarm before changing limits or restarting blocked processes.
+
+The cutoff starts **off** on each app launch. Percentages are remembered locally. A detected usage decrease or changed weekly reset window activates the reset limit, which stays in force until disarmed. Once a cutoff triggers, it stays blocked; a later reset does not silently restart work. Splitrail never redeems your banked reset credits.
+
+**This is a best-effort local cutoff, not a provider-enforced spending cap.** Quota checks run once per minute, and reporting delays or requests already in flight can exceed your chosen percentage. Leave headroom. If fresh quota is unavailable for two minutes, the guard stops protected processes. An app server can contain several conversations, all of which may be interrupted. The process list cannot reliably tell which chat is generating. Only the quota tool's account is measured; processes cannot automatically be matched to accounts. Cloud tasks, other computers, inaccessible processes and independent tool commands are outside the cutoff.
+
+Process scans run every ten seconds only while the Quota page is visible or the guard is armed. They inspect process metadata without reading session histories or continuously sampling CPU usage. Closing Splitrail disables protection. [Detection, stopping and platform details](docs/REFERENCE.md#codex-process-monitor-and-quota-cutoff).
+
 ## Sync usage between computers (optional)
 
 Local tracking works without GitHub. To combine usage from your own computers:
@@ -83,7 +104,7 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 
 | Problem | What to check |
 | --- | --- |
-| `No module named PySide6` or `ijson` | Use a native download, or follow the [Python install instructions](docs/INSTALL.md#python-download-all-three-operating-systems) with the same environment for installation and launch. |
+| `No module named PySide6`, `ijson` or `psutil` | Use a native download, or follow the [Python install instructions](docs/INSTALL.md#python-download-all-three-operating-systems) with the same environment for installation and launch. |
 | Qt plugin or DLL fails to load on Windows | Update to 1.1.2 or newer, which registers Qt's DLL directory before loading QML. Extract the entire native ZIP; do not move just the executable. |
 | No usage appears | Select the correct source in **Settings → Usage & data** and confirm the source tool has local logs. For tools other than Codex, install Splitrail 3.9.1+ and make sure `splitrail --version` works. |
 | Collector is not found | Check PATH or set `SPLITRAIL_BIN` to its executable. The built-in Codex reader can still work without it. |
@@ -94,6 +115,8 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 | Sync says the Splitrail collector was not found | **All tools** sync needs the separate collector even if the dashboard is showing Codex. Install Splitrail 3.9.1+, or select **Settings → GitHub sync → Options → Share from this device → Codex**. Version 1.1.3 reports this cause instead of the generic “Unable to sync” error. On Windows, the app also discovers tools in `%USERPROFILE%\.local\bin`, `%USERPROFILE%\.cargo\bin` and `%APPDATA%\npm`. |
 | Linux desktop launch cannot find installed tools | The app also checks `~/.local/bin`, `~/.cargo/bin`, `~/.npm-global/bin` and `/usr/local/bin`, even when the desktop session has an older `PATH`. Existing `PATH` entries keep priority. Custom install locations must be on the desktop's `PATH`; you can also set `SPLITRAIL_BIN` to the collector executable. |
 | Codex quotas are unavailable | Quota monitoring uses optional tools with their own authentication. It is separate from usage tracking. [Setup details](docs/REFERENCE.md#optional-quota-monitoring). |
+| Cannot arm a cutoff | Refresh quota successfully first. The weekly reading needs a recent source timestamp and a future reset time. Select a process or enable protection for newly opened processes. Demo mode cannot arm cutoffs. |
+| Codex closes after reaching a limit | Open **Quota**, inspect the cutoff status, then **Disarm cutoff** before restarting. A still-armed, triggered guard also stops new engines when that option is enabled. |
 
 For bug reports, include your OS, Python version, app version and the error message. Do not attach raw session logs, credentials or real-account screenshots. See [Privacy](PRIVACY.md).
 
@@ -115,7 +138,7 @@ python -m pip install '.[test]'
 splitrail-desktop
 ```
 
-The source install includes PySide6, ijson and the QML interface resources. After activating the environment, run the tests and build the downloadable app:
+The source install includes PySide6, ijson, psutil and the QML interface resources. After activating the environment, run the tests and build the downloadable app:
 
 ```sh
 PYTHONPATH=src python3 -m unittest discover -s tests -v

@@ -7,7 +7,7 @@ Item {
     property var s: bridge.state
     property var clock: bridge.clock
     property var q: clock.quota
-    property string page: "Overview"
+    property string page: s.initialPage
     property string query: ""
     readonly property bool settingsPage: page==="Settings"
     RowLayout {
@@ -51,6 +51,11 @@ Item {
                 Layout.fillWidth:true;spacing:12
                 ColumnLayout {spacing:6;TextLabel {text:dashboard.page;font.pixelSize:28;font.weight:Font.DemiBold;font.letterSpacing:-1}TextLabel {text:dashboard.settingsPage ? "Make it yours." : s.busy ? "Updating your usage…" : clock.refreshAge;color:AppStyle.muted;font.pixelSize:12}}
                 Item { Layout.fillWidth: true }
+                SoftButton {
+                    visible: bridge.guardState.armed; compact: true; tone: "ghost"
+                    text: bridge.guardState.blocked ? "Cutoff reached" : "Cutoff " + bridge.guardState.activeLimit + "%"
+                    onClicked: dashboard.page = "Quota"
+                }
                 SoftButton {objectName:"refreshButton";iconName:"refresh";tone:"ghost";visible:!dashboard.settingsPage;enabled:!s.busy && !s.quotaBusy && !s.syncBusy;accessibleName:"Refresh usage";onClicked:bridge.refresh()}
                 Item {width:38;height:40
                     SoftButton {objectName:"notificationsButton";anchors.fill:parent;iconName:"bell";tone:"ghost";accessibleName:"Notifications";onClicked:notifications.open()}
@@ -188,6 +193,7 @@ Item {
                         TextLabel {text:q.available ? "Resets "+q.reset+"  ·  "+q.countdown : "Install quota-axi to display your Codex allowance.";font.pixelSize:12;color:AppStyle.muted;Layout.fillWidth:true}
                     }
                 }
+                QuotaGuardPanel {Layout.fillWidth:true}
                 Rectangle {
                     Layout.fillWidth:true;Layout.preferredHeight:bankContent.implicitHeight+40;radius:20;color:AppStyle.surface
                     ColumnLayout {

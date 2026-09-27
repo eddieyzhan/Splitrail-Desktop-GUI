@@ -21,6 +21,8 @@ from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
 from .refresh import AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
 from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
+from .processes import CodexProcess, discover_codex_processes, stop_codex_processes
+from .quota_guard import QuotaGuard, QuotaLimits, PROCESS_REFRESH_SECONDS
 
 
 def quota_timestamp_parts(value: datetime | None) -> dict[str, str]:
@@ -53,10 +55,11 @@ def shifted_range(preset: str, offset: int, today: date, dataset: UsageDataset) 
 class DesktopController(QObject):
     changed = Signal()
     clockChanged = Signal()
+    guardChanged = Signal()
     completed = Signal(str, object, object, int)
     setupEvent = Signal(str, str, int)
 
-    def __init__(self, *, demo=False, onboarding=False, auto_refresh=True, codex_usage=False):
+    def __init__(self, *, demo=False, onboarding=False, auto_refresh=True, codex_usage=False, quota_page=False):
         super().__init__()
         self.demo = demo
         self.closed = False
@@ -85,12 +88,35 @@ class DesktopController(QObject):
         self._clock.timeout.connect(self.tick)
         self._clock.start(1000)
         prefs = preferences.load()
+        self._guard = QuotaGuard()
+        self._guard_cancel = threading.Event()
+        self._guard_generation = 0
+        self._processes = ()
+        self._process_view_visible = False
+        self._excluded_processes = set()
+        self._guard_targets = set()
+        self._include_new_processes = True
+        self._stopped_count = 0
+        self._process_timer = QTimer(self)
+        self._process_timer.setInterval(PROCESS_REFRESH_SECONDS * 1000)
+        self._process_timer.timeout.connect(self.refreshProcesses)
+        try:
+            limits = QuotaLimits(**prefs.get('quota_limits', {}))
+        except (TypeError, ValueError):
+            limits = QuotaLimits()
+        self._guard.limits = limits
+        self._guard_state = {'armed': False, 'blocked': False, 'afterReset': False,
+                             'currentLimit': limits.current, 'resetLimit': limits.after_reset,
+                             'activeLimit': limits.current, 'includeNew': True, 'processes': [],
+                             'busy': False, 'stopping': False, 'error': '', 'stopErrors': '',
+                             'checked': '', 'status': 'Cutoff is off.', 'stoppedCount': 0}
         collector = bool(os.environ.get('SPLITRAIL_BIN') or shutil.which('splitrail') or SPLITRAIL_FALLBACK.exists())
         mode = 'codex' if codex_usage or not collector else prefs.get('usage_mode', 'combined')
         if mode not in ('combined', 'codex', 'local'):
             mode = 'combined' if collector else 'codex'
         self._state = {
             'appVersion': __version__,
+            'initialPage': 'Quota' if quota_page else 'Overview',
             'theme': prefs.get('theme', 'Pearl'), 'onboarding': bool(onboarding or (not prefs.get('onboarded') and not demo)),
             'setupStage': 'welcome', 'setupError': '', 'setupBusy': False, 'setupLogin': '', 'setupCode': '',
             'ghAvailable': bool(shutil.which('gh')), 'repoName': 'splitrail-usage', 'repoExisting': False,
@@ -125,6 +151,122 @@ class DesktopController(QObject):
     @Property("QVariantMap", notify=clockChanged)
     def clock(self):
         return {"refreshAge": self._state["refreshAge"], "quota": self._state["quota"]}
+
+    @Property('QVariantMap', notify=guardChanged)
+    def guardState(self):
+        return self._guard_state
+
+    def _update_guard(self):
+        guard = self._guard
+        status = 'Cutoff is off. Arm it for this app session.'
+        if guard.armed:
+            status = guard.reason if guard.blocked else (
+                f'Watching weekly usage · stop at {guard.limit:g}%'
+                + (' · reset detected' if guard.after_reset else ''))
+        self._guard_state.update(
+            armed=guard.armed, blocked=guard.blocked, afterReset=guard.after_reset,
+            activeLimit=guard.limit, status=status, stoppedCount=self._stopped_count,
+            processes=[{'key': p.key, 'pid': p.pid, 'kind': p.kind, 'directory': p.directory,
+                        'executable': p.executable, 'status': p.status,
+                        'started': datetime.fromtimestamp(p.started).strftime('%d %b %H:%M:%S'),
+                        'protected': self._is_protected(p)} for p in self._processes])
+        self.guardChanged.emit()
+
+    def _is_protected(self, process):
+        if self._guard.armed and not self._include_new_processes:
+            return process.key in self._guard_targets
+        return process.key not in self._excluded_processes
+
+    def _schedule_process_scan(self):
+        if not self.demo and self.auto_refresh and (self._process_view_visible or self._guard.armed):
+            self._process_timer.start()
+        else:
+            self._process_timer.stop()
+
+    @Slot(bool)
+    def setProcessViewVisible(self, visible):
+        self._process_view_visible = visible
+        self._schedule_process_scan()
+        if visible:
+            self.refreshProcesses()
+
+    @Slot()
+    def refreshProcesses(self):
+        if self.closed or 'processes' in self._tasks:
+            return
+        if self.demo:
+            self._processes = (CodexProcess(4242, 1788000000, '/example/bin/codex',
+                                          '/example/projects/website', 'CLI session', 'sleeping'),
+                               CodexProcess(4243, 1788000100, '/example/bin/codex',
+                                          '/example/projects/app', 'App server · multiple chats', 'sleeping'))
+            self._guard_state['checked'] = 'Synthetic preview'
+            self._update_guard()
+            return
+        self._guard_state['busy'] = True
+        self._run('processes', discover_codex_processes)
+        self._update_guard()
+
+    @Slot(str, bool)
+    def protectProcess(self, key, enabled):
+        if self._guard.armed or key not in {p.key for p in self._processes}:
+            return
+        if enabled:
+            self._excluded_processes.discard(key)
+        else:
+            self._excluded_processes.add(key)
+        self._update_guard()
+
+    @Slot(str, str, bool)
+    def armQuotaGuard(self, current, after_reset, include_new):
+        if self.demo:
+            self._guard_state['error'] = 'Demo mode cannot stop processes.'
+        elif self._guard.armed or 'guard-stop' in self._tasks:
+            return
+        else:
+            try:
+                limits = QuotaLimits(float(current), float(after_reset))
+                targets = {p.key for p in self._processes if self._is_protected(p)}
+                if not targets and not include_new:
+                    raise ValueError('Select a process or include newly opened processes.')
+                if 'quota' in self._notifications:
+                    raise ValueError('Refresh quota successfully before arming the cutoff.')
+                self._guard.arm(limits, self.quota_snapshot)
+                self._guard_cancel = threading.Event()
+                self._guard_generation += 1
+                self._guard_targets = targets
+                self._include_new_processes = include_new
+                self._stopped_count = 0
+                self._guard_state.update(error='', stopErrors='', currentLimit=limits.current,
+                                         resetLimit=limits.after_reset, includeNew=include_new)
+                try:
+                    preferences.save(quota_limits={'current': limits.current, 'after_reset': limits.after_reset})
+                except OSError:
+                    self._guard_state['error'] = 'Cutoff is armed, but the limit preferences could not be saved.'
+                self._schedule_process_scan()
+                self._enforce_guard()
+                self.refreshProcesses()
+            except ValueError as exc:
+                self._guard_state['error'] = str(exc)
+        self._update_guard()
+
+    @Slot()
+    def disarmQuotaGuard(self):
+        self._guard_cancel.set()
+        self._guard_generation += 1
+        self._guard.disarm()
+        self._guard_state['error'] = ''
+        self._schedule_process_scan()
+        self._update_guard()
+
+    def _enforce_guard(self):
+        if self.demo or self.closed or not self._guard.blocked or 'guard-stop' in self._tasks:
+            return
+        targets = tuple(p for p in self._processes if self._is_protected(p))
+        if not targets:
+            return
+        cancel = self._guard_cancel
+        self._guard_state['stopping'] = True
+        self._run('guard-stop', lambda: stop_codex_processes(targets, cancel), self._guard_generation)
 
     def _emit(self):
         if not self.closed:
@@ -181,7 +323,7 @@ class DesktopController(QObject):
         self._emit()
 
     def _start_quota_refresh(self) -> bool:
-        if self.closed or self.demo or self._state['onboarding'] or 'quota' in self._tasks:
+        if self.closed or self.demo or (self._state['onboarding'] and not self._guard.armed) or 'quota' in self._tasks:
             return False
         self._quota_timer.stop()
         self._state['quotaBusy'] = True
@@ -247,10 +389,37 @@ class DesktopController(QObject):
             else:
                 self._notifications.pop('quota', None)
                 self.quota_snapshot = preserve_banked_resets(value.snapshot, self.quota_snapshot)
+                self._guard.observe(value.snapshot)
+                self._enforce_guard()
+                if self._guard.armed:
+                    self._update_guard()
             self.tick()
             if self.auto_refresh:
-                interval = QUOTA_RETRY_SECONDS if error else QUOTA_REFRESH_SECONDS
+                interval = QUOTA_RETRY_SECONDS if error and not self._guard.armed else QUOTA_REFRESH_SECONDS
                 self._quota_timer.start(interval * 1000)
+        elif kind == 'processes':
+            self._guard_state['busy'] = False
+            if error:
+                self._guard_state['error'] = 'Could not inspect local processes. Check OS permissions.'
+            else:
+                self._processes = value
+                self._guard_state['checked'] = datetime.now().strftime('%H:%M:%S')
+                self._excluded_processes.intersection_update(p.key for p in value)
+            self._enforce_guard()
+            self._update_guard()
+            return
+        elif kind == 'guard-stop':
+            self._guard_state['stopping'] = False
+            if generation == self._guard_generation:
+                if error:
+                    self._guard_state['stopErrors'] = 'Could not stop protected processes. Close them manually.'
+                else:
+                    self._stopped_count += len(value.stopped)
+                    self._guard_state['stopErrors'] = '\n'.join(value.failures)
+                    stopped = set(value.stopped)
+                    self._processes = tuple(p for p in self._processes if p.pid not in stopped)
+                self._notice('quota-cutoff', 'Codex quota cutoff reached', self._guard.reason)
+            self._update_guard()
         elif kind in ('account', 'auth', 'connect'):
             self._state['setupBusy'] = False
             if error:
@@ -296,6 +465,11 @@ class DesktopController(QObject):
     def tick(self):
         if self.closed:
             return
+        was_blocked = self._guard.blocked
+        self._guard.check_age()
+        if self._guard.blocked and not was_blocked:
+            self._enforce_guard()
+            self._update_guard()
         if self._last_refresh:
             self._state['refreshAge'] = format_refresh_age(self._last_refresh)
         snapshot = self.quota_snapshot
@@ -444,7 +618,8 @@ class DesktopController(QObject):
     @Slot()
     def beginSetup(self):
         self._timer.stop()
-        self._quota_timer.stop()
+        if not self._guard.armed:
+            self._quota_timer.stop()
         self._auth_cancel.set()
         self._setup_generation += 1
         self._state.update(onboarding=True, setupStage='welcome', setupError='', setupBusy=False, setupCode='')
@@ -679,6 +854,9 @@ class DesktopController(QObject):
     @Slot()
     def close(self):
         self.closed = True
+        self._guard_cancel.set()
+        self._guard.disarm()
+        self._process_timer.stop()
         self._auth_cancel.set()
         self._timer.stop()
         self._quota_timer.stop()

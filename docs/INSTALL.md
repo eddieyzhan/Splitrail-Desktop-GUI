@@ -21,7 +21,7 @@ Install Python 3.11–3.14 from [python.org](https://www.python.org/downloads/) 
 
 ```powershell
 py -3 -m venv .venv
-.venv\Scripts\python -m pip install "PySide6==6.11.2" "ijson==3.5.1"
+.venv\Scripts\python -m pip install "PySide6==6.11.2" "ijson==3.5.1" "psutil==7.2.2"
 .venv\Scripts\python splitrail-desktop.pyz
 ```
 
@@ -29,7 +29,7 @@ py -3 -m venv .venv
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install "PySide6==6.11.2" "ijson==3.5.1"
+.venv/bin/python -m pip install "PySide6==6.11.2" "ijson==3.5.1" "psutil==7.2.2"
 .venv/bin/python splitrail-desktop.pyz
 ```
 

@@ -1,3 +1,3 @@
 """Splitrail Desktop: local usage with optional private GitHub sync."""
 
-__version__ = "1.1.4"
+__version__ = "1.2.0"

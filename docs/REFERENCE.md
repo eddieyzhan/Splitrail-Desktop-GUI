@@ -28,6 +28,20 @@ Unknown models keep their tokens and appear in **Notifications**, with a shortcu
 
 If `quota-axi` is on your PATH, the app runs `quota-axi --provider codex --full --json` for quota display. If `codex` is available, a read-only app-server query can supply banked-reset information. These tools manage their own authentication. Missing quota tools do not block usage or sync. The app never consumes reset credits or uploads account/quota data.
 
+## Codex process monitor and quota cutoff
+
+The **Quota** page lists accessible native `codex` / `codex.exe` engines owned by the current OS user. Each row shows a PID, start time, executable path, working directory, engine type and OS status. Wrapper processes, Codex helper hosts and Splitrail's own read-only quota subprocesses are excluded. WSL, containers, remote hosts and inaccessible processes may require Splitrail to run in the same environment as Codex. OS status describes the process, not chat activity; an app server can host multiple chats. Arbitrary shell commands and conversation text are not shown.
+
+**Arm cutoff** authorizes termination of the selected engines while this instance of Splitrail is open. New engines are covered only if **Also protect newly opened Codex processes** is checked. With that option off, protection is bound to the selected PID and start time; a replacement process is not silently adopted. Before each stop, the app rechecks process ownership, executable and start time to avoid signalling a reused PID. Unix uses `SIGTERM`; Windows uses process termination. Splitrail does not force-kill a Unix engine that ignores the signal: it reports the failure and retries during subsequent process checks. It does not terminate arbitrary tool/shell descendants, which may continue independently.
+
+Both limits are absolute percentages of the weekly allowance, from 0 to 100. The current limit applies immediately, including when usage is already at or above it. A newer fresh reading with lower usage, a different weekly window ID, a reset deadline changed by more than one minute, or a rollover past the previous deadline switches to the after-reset limit. This also covers observed unexpected resets with unchanged deadlines. The reset limit remains active through further resets until disarmed. Reset detection is based on observable quota changes: a reset followed by enough usage to hide the decrease between polls, with an unchanged deadline, cannot be identified reliably.
+
+The guard needs fresh weekly data to arm. It rejects missing source timestamps, stale/failed reads and expired reset times. Duplicate or out-of-order readings never extend the freshness deadline or invent a reset. If no usable source reading has arrived for two minutes, it stops protected engines. Temporary failures keep retrying once per minute while armed. Once triggered, the cutoff remains blocked until explicitly disarmed, including across later quota resets. It never restarts terminated processes or redeems reset credits.
+
+This is a **best-effort local guard**. Quota is polled once per minute after the preceding read completes; reporting latency, polling time, OS permissions, missed resets and requests already in flight can cause overshoot. Leave headroom below any strict target. It monitors the account reported by `quota-axi`, without attributing each process to an account. It cannot enforce an account-wide cap on cloud jobs or other devices. OpenAI documents rate-limit reads and interruptions within a connected app server in its [App Server reference](https://learn.chatgpt.com/docs/app-server); starting a separate server does not provide a universal control channel to already-open CLI or IDE conversations.
+
+Process discovery runs in a background worker every ten seconds while the page is visible or protection is armed, with no overlapping scans. It reads names first and fetches detailed metadata only for matching candidates. It does not scan usage histories, sample CPU continuously, or add network polling beyond the normal quota refresh. Percentages persist in `preferences.json`; process selections, paths and armed state stay in memory. Closing the application cancels pending stops and disables the guard. Start it again and explicitly arm to protect another run. Demo mode uses synthetic process rows and cannot terminate processes.
+
 ## Local data and controls
 
 Application data is stored under:
@@ -38,7 +52,7 @@ Application data is stored under:
 | Windows | `%LOCALAPPDATA%/splitrail-desktop` |
 | macOS | `~/Library/Application Support/splitrail-desktop` |
 
-`preferences.json` stores appearance and onboarding state; `model-prices.json` stores custom rates. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
+`preferences.json` stores appearance, onboarding state and quota cutoff percentages; `model-prices.json` stores custom rates. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
 
 The app streams `splitrail stats --include-messages` to calculate hourly activity from normalized timestamp/token/cost statistics. It retains only aggregate fields: session names, IDs, project metadata and unexpected content are discarded in memory, and the source records are never saved or synced. The collector’s daily totals remain authoritative; request-level cost precision can cause small rounding differences in hourly sums. Inconsistent hourly reasoning counts are omitted from the chart and sync’s optional hourly detail, while daily and model totals remain intact. Notifications explain any hourly coverage gap. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
 
@@ -54,6 +68,7 @@ The commands below run from a source checkout. For the downloaded application, r
 
 ```bash
 python3 splitrail-desktop --codex-usage
+python3 splitrail-desktop --quota
 python3 splitrail-desktop --export-usage usage.json.gz
 python3 splitrail-desktop --import-usage usage.json.gz
 python3 splitrail-desktop --setup-sync OWNER/REPO --sync-codex-only
@@ -64,4 +79,4 @@ CLI setup expects an existing private repository and GitHub CLI sign-in. Add `--
 
 ## Source layout
 
-Core modules: `domain.py` aggregates usage, `pricing.py` resolves rates, `portable.py` handles Codex logs, `sync_payload.py` defines the wire format, `sync.py` handles private GitHub transport, and `desktop.py` bridges the engines to Qt, and `qml/` contains the dashboard, staged onboarding and reusable controls. `qt_app.py` loads resources from source, wheel or zipapp.
+Core modules: `domain.py` aggregates usage, `pricing.py` resolves rates, `portable.py` handles Codex logs, `sync_payload.py` defines the wire format, `sync.py` handles private GitHub transport, `quota_guard.py` evaluates cutoff/reset decisions, and `processes.py` discovers and stops verified local engines. `desktop.py` bridges the engines to Qt, and `qml/` contains the dashboard, staged onboarding and reusable controls. `qt_app.py` loads resources from source, wheel or zipapp.

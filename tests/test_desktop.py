@@ -11,11 +11,108 @@ from splitrail_desktop.pricing import load_overrides
 from splitrail_desktop.refresh import NORMAL_REFRESH_SECONDS, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
 from splitrail_desktop.quota import BankedResetStatus, format_local_reset
 from splitrail_desktop.runner import CostDiagnostics, QuotaCommandResult, StatsCommandResult
+from splitrail_desktop.processes import CodexProcess, StopResult
+from test_quota_guard import snapshot as guard_snapshot
 from test_combined import collector_fixture, event
 from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def prepare_guard(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        now = datetime.now(timezone.utc)
+        c.quota_snapshot = guard_snapshot(now=now, reset=now + timedelta(days=3))
+        c._processes = (CodexProcess(123, 1000, '/example/codex', '/example/a', 'CLI session', 'sleeping'),
+                        CodexProcess(456, 1001, '/example/codex', '/example/b', 'CLI session', 'sleeping'))
+        return c, now
+
+    def test_guard_stops_only_selected_processes_and_latches_for_new_starts(self):
+        c, now = self.prepare_guard()
+        c.protectProcess(c._processes[1].key, False)
+        with patch.object(c, 'refreshProcesses'), \
+             patch('splitrail_desktop.desktop.stop_codex_processes', return_value=StopResult((123,), ())) as stop:
+            c.armQuotaGuard('95', '5', True)
+            self.assertTrue(c.guardState['armed'])
+            stop.assert_not_called()
+            c._finished('quota', QuotaCommandResult(guard_snapshot(6, now + timedelta(seconds=1), now + timedelta(days=3)), 0), None, -1)
+            self.wait_for(lambda: 'guard-stop' not in c._tasks)
+            self.assertEqual([p.pid for p in stop.call_args.args[0]], [123])
+            self.assertTrue(c.guardState['afterReset'])
+            self.assertTrue(c.guardState['blocked'])
+            self.assertEqual(c.guardState['stoppedCount'], 1)
+            new = replace(c._processes[0], pid=789, started=1002)
+            c._finished('processes', (*c._processes, new), None, -1)
+            self.wait_for(lambda: 'guard-stop' not in c._tasks)
+            self.assertEqual([p.pid for p in stop.call_args.args[0]], [789])
+            c.disarmQuotaGuard()
+            self.assertFalse(c.guardState['armed'])
+            self.assertTrue(stop.call_args.args[1].is_set())
+        saved = preferences.load()
+        self.assertEqual(saved['quota_limits'], {'current': 95, 'after_reset': 5})
+        self.assertNotIn('processes', saved)
+        self.assertNotIn('armed', saved)
+
+    def test_selected_scope_does_not_adopt_restarted_process(self):
+        c, now = self.prepare_guard()
+        with patch.object(c, 'refreshProcesses'):
+            c.armQuotaGuard('95', '5', False)
+        original = c._processes[0]
+        self.assertTrue(c._is_protected(original))
+        self.assertFalse(c._is_protected(replace(original, started=2000)))
+        c.disarmQuotaGuard()
+
+    def test_guard_rejects_bad_limits_and_stale_quota_without_stopping(self):
+        c, now = self.prepare_guard()
+        for current, fresh in (('NaN', True), ('101', True), ('95', False)):
+            c.quota_snapshot = replace(c.quota_snapshot, stale=not fresh)
+            c.armQuotaGuard(current, '5', True)
+            self.assertFalse(c.guardState['armed'])
+            self.assertTrue(c.guardState['error'])
+        self.assertNotIn('guard-stop', c._tasks)
+
+    def test_guard_watchdog_stops_after_failed_refresh_and_can_disarm_pending_scan(self):
+        c, now = self.prepare_guard()
+        with patch.object(c, 'refreshProcesses'), \
+             patch('splitrail_desktop.desktop.stop_codex_processes', return_value=StopResult((123, 456), ())) as stop:
+            c.armQuotaGuard('95', '5', True)
+            c._finished('quota', None, RuntimeError('offline'), -1)
+            stop.assert_not_called()
+            c._guard.last_snapshot = guard_snapshot(now=now-timedelta(seconds=121), reset=now+timedelta(days=3))
+            c.tick()
+            self.wait_for(lambda: 'guard-stop' not in c._tasks)
+            stop.assert_called_once()
+            c.disarmQuotaGuard()
+            c._finished('processes', (), None, -1)
+            self.assertFalse(c.guardState['blocked'])
+
+    def test_process_polling_is_dormant_off_page_unless_armed_and_stops_on_close(self):
+        c, _ = self.prepare_guard()
+        c.auto_refresh = True
+        with patch.object(c, 'refreshProcesses'):
+            self.assertFalse(c._process_timer.isActive())
+            c.setProcessViewVisible(True)
+            self.assertTrue(c._process_timer.isActive())
+            c.setProcessViewVisible(False)
+            self.assertFalse(c._process_timer.isActive())
+            c.armQuotaGuard('95', '5', True)
+            self.assertTrue(c._process_timer.isActive())
+            c.close()
+            self.assertFalse(c._process_timer.isActive())
+            self.assertTrue(c._guard_cancel.is_set())
+
+    def test_demo_guard_never_scans_or_stops_real_processes(self):
+        c = self.controller
+        c.demo = True
+        with patch('splitrail_desktop.desktop.discover_codex_processes') as scan, \
+             patch('splitrail_desktop.desktop.stop_codex_processes') as stop:
+            c.refreshProcesses()
+            c.armQuotaGuard('0', '0', True)
+            self.assertEqual(len(c.guardState['processes']), 2)
+            self.assertFalse(c.guardState['armed'])
+            scan.assert_not_called()
+            stop.assert_not_called()
+
     def test_banked_expiry_display_distinguishes_missing_nonexpiring_and_stale(self):
         now = datetime.now(timezone.utc)
         expiry = now + timedelta(days=5)

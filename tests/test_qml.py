@@ -12,6 +12,8 @@ from qt_support import QtCase
 from splitrail_desktop import demo, sync
 from splitrail_desktop.pricing import load_overrides
 from splitrail_desktop.quota import BankedResetStatus, format_local_reset
+from splitrail_desktop.processes import CodexProcess
+from test_quota_guard import snapshot as guard_snapshot
 
 QML = Path(__file__).parents[1] / 'src' / 'splitrail_desktop' / 'qml'
 
@@ -96,6 +98,39 @@ class QmlTests(QtCase):
         self.controller.tick()
         QTest.qWait(30)
         self.assertFalse(self.item('quotaPageBar').findChild(QObject, 'paceMarker').property('visible'))
+
+    def test_quota_guard_fields_arm_and_disarm_without_signalling_real_processes(self):
+        dashboard = self.dashboard()
+        now = datetime.now(timezone.utc)
+        self.controller.quota_snapshot = guard_snapshot(now=now, reset=now+timedelta(days=3))
+        dashboard.setProperty('page', 'Quota')
+        QTest.qWait(50)
+        self.item('quotaCurrentLimit').setProperty('text', '92.5')
+        self.item('quotaResetLimit').setProperty('text', '4')
+        with patch.object(self.controller, 'refreshProcesses'):
+            QMetaObject.invokeMethod(self.item('armQuotaGuard'), 'clicked')
+            QTest.qWait(30)
+            self.assertTrue(self.controller.guardState['armed'])
+            self.assertEqual(self.controller.guardState['activeLimit'], 92.5)
+            self.assertFalse(self.item('quotaCurrentLimit').property('enabled'))
+            self.assertEqual(self.item('armQuotaGuard').property('text'), 'Disarm cutoff')
+            QMetaObject.invokeMethod(self.item('armQuotaGuard'), 'clicked')
+            QTest.qWait(30)
+            self.assertFalse(self.controller.guardState['armed'])
+
+    def test_process_rows_show_identity_and_selection(self):
+        dashboard = self.dashboard()
+        dashboard.setProperty('page', 'Quota')
+        QTest.qWait(50)
+        c = self.controller
+        c._processes = (CodexProcess(123, 1000, '/example/bin/codex', '/example/project', 'CLI session', 'sleeping'),)
+        c._update_guard()
+        QTest.qWait(30)
+        control = self.item('protectProcess-0')
+        self.assertTrue(control.property('checked'))
+        control.setProperty('checked', False)
+        QMetaObject.invokeMethod(control, 'clicked')
+        self.assertFalse(c.guardState['processes'][0]['protected'])
 
     def test_quota_page_names_codex_and_shows_exact_banked_expiries(self):
         self.dashboard()

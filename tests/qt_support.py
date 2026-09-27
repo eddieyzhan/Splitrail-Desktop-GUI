@@ -37,10 +37,14 @@ class QtCase(unittest.TestCase):
         self.addCleanup(env.stop)
         # Any unexpected network/collector call fails the test, never uses a real account.
         for target in ('splitrail_desktop.sync._api', 'splitrail_desktop.sync.account',
-                       'splitrail_desktop.desktop.run_quota_axi', 'splitrail_desktop.desktop.run_splitrail'):
+                       'splitrail_desktop.desktop.run_quota_axi', 'splitrail_desktop.desktop.run_splitrail',
+                       'splitrail_desktop.desktop.stop_codex_processes'):
             guard = patch(target, side_effect=AssertionError('Unexpected external operation'))
             guard.start()
             self.addCleanup(guard.stop)
+        scanner = patch('splitrail_desktop.desktop.discover_codex_processes', return_value=())
+        scanner.start()
+        self.addCleanup(scanner.stop)
         self.controller = DesktopController(auto_refresh=False)
         self.addCleanup(self.controller.close)
 

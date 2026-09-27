@@ -16,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--smoke-ui", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--codex-usage", action="store_true", help="Show deduplicated Codex usage across devices")
+    parser.add_argument("--quota", action="store_true", help="Open Codex quota, process monitor and cutoff controls")
     parser.add_argument("--export-usage", metavar="FILE", help="Export this computer's Codex usage (.json.gz recommended)")
     parser.add_argument("--import-usage", metavar="FILE", help="Merge a Codex usage export; repeat imports are safe")
     parser.add_argument("--setup-sync", metavar="OWNER/REPO", help="Configure a private GitHub repository for device sync")
@@ -59,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.self_check:
         import ijson
+        import psutil
         from PySide6.QtCore import qVersion
         from .pricing import CATALOG
         assert len(CATALOG['models']) >= 50
@@ -67,11 +69,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import ijson  # Validate the streaming dependency before opening the GUI.
         from .qt_app import run
-        return run(demo=args.demo, onboarding=args.onboarding, smoke=args.smoke_ui, codex_usage=args.codex_usage)
+        return run(demo=args.demo, onboarding=args.onboarding, smoke=args.smoke_ui,
+                   codex_usage=args.codex_usage, quota_page=args.quota)
     except ImportError as exc:
-        if 'PySide6' not in str(exc) and 'ijson' not in str(exc):
+        if not any(name in str(exc) for name in ('PySide6', 'ijson', 'psutil')):
             raise
-        print('Install the desktop UI with: python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4"', file=sys.stderr)
+        print('Install the desktop UI with: python -m pip install "PySide6>=6.8,<7" "ijson>=3.4,<4" "psutil>=7.2,<8"', file=sys.stderr)
         return 1
 
 
