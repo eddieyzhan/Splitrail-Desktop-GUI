@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .portable import data_dir, digest, write_export
+from .platform_support import external_command_env, path_executable
 from .sync_payload import decode_dataset, encode_dataset
 
 SETTINGS_FILE = 'github-sync-v2.json'
@@ -63,7 +64,7 @@ def safe_settings(directory: Path | None = None) -> dict | None:
 
 
 def _gh() -> str:
-    executable = shutil.which('gh')
+    executable = path_executable('gh')
     if not executable:
         raise SyncError('Install GitHub CLI, then choose Check connection.')
     return executable
@@ -71,7 +72,7 @@ def _gh() -> str:
 
 def _environment() -> dict:
     # Always address github.com explicitly, regardless of a shell's GH_HOST.
-    return {**os.environ, 'GH_HOST': 'github.com', 'GH_PROMPT_DISABLED': '1', 'GH_PAGER': 'cat'}
+    return {**external_command_env(), 'GH_HOST': 'github.com', 'GH_PROMPT_DISABLED': '1', 'GH_PAGER': 'cat'}
 
 
 def _api(endpoint: str, *, payload: dict | None = None, method: str = 'GET',

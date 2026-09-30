@@ -20,7 +20,8 @@ from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_o
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
 from .refresh import AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
-from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK
+from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK, _find_executable, MissingCommandError
+from .catalog_updates import refresh_prices
 from .processes import CodexProcess, discover_codex_processes, stop_codex_processes
 from .quota_guard import QuotaGuard, QuotaLimits, PROCESS_REFRESH_SECONDS
 
@@ -110,7 +111,15 @@ class DesktopController(QObject):
                              'activeLimit': limits.current, 'includeNew': True, 'processes': [],
                              'busy': False, 'stopping': False, 'error': '', 'stopErrors': '',
                              'checked': '', 'status': 'Cutoff is off.', 'stoppedCount': 0}
-        collector = bool(os.environ.get('SPLITRAIL_BIN') or shutil.which('splitrail') or SPLITRAIL_FALLBACK.exists())
+        collector = bool(os.environ.get('SPLITRAIL_BIN'))
+        if not collector:
+            try:
+                _find_executable('SPLITRAIL_BIN', 'splitrail', SPLITRAIL_FALLBACK)
+                collector = True
+            except MissingCommandError:
+                pass
+        if not demo:
+            refresh_prices(allow_network=False)
         mode = 'codex' if codex_usage or not collector else prefs.get('usage_mode', 'combined')
         if mode not in ('combined', 'codex', 'local'):
             mode = 'combined' if collector else 'codex'
@@ -123,6 +132,8 @@ class DesktopController(QObject):
             'busy': False, 'quotaBusy': False, 'syncBusy': False, 'usageMode': mode,
             'displayedMode': mode, 'hasUsage': False, 'refreshAge': 'Ready when you are',
             'notifications': [], 'prices': [], 'priceError': '', 'priceNotice': '',
+            'automaticPrices': prefs.get('automatic_prices', True) is not False,
+            'priceCatalogDate': CATALOG['verified'],
             'connected': False, 'repository': '', 'automatic': False, 'receiveOnly': False,
             'syncScope': 'all' if collector else 'codex', 'syncStatus': 'Only on this device',
             'period': 'This month', 'range': '', 'start': '', 'end': '', 'preset': 'Month',
@@ -310,7 +321,9 @@ class DesktopController(QObject):
             self._state['busy'] = True
             mode = self._state['usageMode']
             generation = self._usage_generation
+            automatic_prices = self._state['automaticPrices']
             def collect():
+                refresh_prices(allow_network=automatic_prices)
                 if mode == 'combined':
                     from .combined import run_combined_usage
                     return run_combined_usage()
@@ -377,6 +390,7 @@ class DesktopController(QObject):
                 self._notice('usage', 'Usage could not refresh', detail)
             else:
                 self._accept_usage(value)
+            self.loadPrices()
             if self.auto_refresh:
                 self._timer.start(self._policy.interval_seconds * 1000)
             if self._pricing_pending:
@@ -770,9 +784,21 @@ class DesktopController(QObject):
                              'priceNote': CATALOG.get('unpriced', {}).get(name, ''),
                              **{key: str(rate[key]) if rate and rate.get(key) is not None else '' for key in RATE_FIELDS}})
             self._state['prices'] = rows
+            self._state['priceCatalogDate'] = CATALOG['verified']
         except (ValueError, OSError) as exc:
             self._state['priceError'] = str(exc)
         self._emit()
+
+    @Slot(bool)
+    def setAutomaticPrices(self, enabled):
+        if not self.demo:
+            preferences.save(automatic_prices=enabled)
+        self._state['automaticPrices'] = enabled
+        self._emit()
+        if self._state['busy'] or self._state['syncBusy']:
+            self._pricing_pending = True
+        else:
+            self.refresh()
 
     @Slot(str, str, str, str, str, result=bool)
     def savePrice(self, model, input_rate, output_rate, read_rate, write_rate):

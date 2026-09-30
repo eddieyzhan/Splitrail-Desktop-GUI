@@ -14,6 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--demo", action="store_true", help="Try the interface with synthetic data; no account or usage access")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--smoke-collector", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--smoke-ui", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--codex-usage", action="store_true", help="Show deduplicated Codex usage across devices")
     pages = parser.add_mutually_exclusive_group()
@@ -27,6 +28,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--sync-codex-only', action='store_true', help='Sync Codex totals without the Splitrail collector')
     parser.add_argument('--auto-sync', action='store_true', help='Opt in to sync on usage refresh')
     args = parser.parse_args(argv)
+    if args.smoke_collector:
+        # Build-only check with an isolated synthetic collector on PATH.
+        from .runner import run_splitrail
+        from .sync import _collect
+        from .sync_payload import decode_dataset
+        result = run_splitrail()
+        assert result.dataset.days and not result.cost_diagnostics.unknown_models
+        assert result.dataset.days[0].model_details[0].name == 'gpt-6.1-sol'
+        assert abs(result.dataset.days[0].cost - 3.05) < 1e-9
+        payload = _collect({'scope': 'all', 'device': 'a' * 32})
+        assert decode_dataset(payload).days == result.dataset.days
+        print('External collector discovery, pricing and All tools sync payload passed')
+        return 0
+    if args.setup_sync or args.sync_usage or args.export_usage or args.import_usage:
+        from .catalog_updates import refresh_prices
+        from .preferences import load
+        refresh_prices(allow_network=load().get('automatic_prices', True) is not False)
     if args.setup_sync or args.sync_usage:
         import json
         import os

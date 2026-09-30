@@ -4,7 +4,6 @@ import json
 import os
 import queue
 import re
-import shutil
 import subprocess
 import threading
 import time
@@ -14,7 +13,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from .domain import StatsDataError, UsageDataset, parse_stats_json
-from .platform_support import command_options
+from .platform_support import command_options, external_command_env, is_desktop_executable, path_executable
 from .quota import (
     BankedResetStatus,
     QuotaDataError,
@@ -25,7 +24,7 @@ from .quota import (
 )
 
 
-SPLITRAIL_FALLBACK = Path.home() / ".local/bin/splitrail"
+SPLITRAIL_FALLBACK = Path.home() / ".local/bin" / ("splitrail.exe" if os.name == "nt" else "splitrail")
 QUOTA_AXI_FALLBACK = Path.home() / ".npm-global/bin/quota-axi"
 CODEX_FALLBACK = Path.home() / ".npm-global/bin/codex"
 MAX_OUTPUT_BYTES = 50 * 1024 * 1024
@@ -120,12 +119,18 @@ def run_splitrail(timeout_seconds: float = 45) -> StatsCommandResult:
 
 def _check_splitrail_version(executable: str, timeout_seconds: float) -> None:
     completed = _run((executable, "--version"), timeout_seconds, "Splitrail version check")
-    match = re.fullmatch(r"splitrail\s+(\d+)\.(\d+)\.(\d+)(?:\+\S+)?\s*", completed.stdout)
+    output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", completed.stdout + "\n" + completed.stderr)
+    match = re.search(r"^splitrail\s+v?(\d+)\.(\d+)\.(\d+)(?:\+\S+)?\s*$", output, re.I | re.M)
     required = ".".join(map(str, MIN_SPLITRAIL_VERSION))
     if completed.returncode or match is None:
+        if re.search(r"Splitrail Desktop", output, re.I):
+            raise LocalCommandError(
+                "The selected executable is Splitrail Desktop, not the usage collector. "
+                "Set SPLITRAIL_BIN to the separate Splitrail collector executable."
+            )
         raise LocalCommandError(
             f"Could not verify Splitrail version. Install Splitrail {required} or newer "
-            f"for current model pricing (executable: {executable})."
+            f"for current model pricing (executable: {executable}; exit status: {completed.returncode})."
         )
     version = tuple(map(int, match.groups()))
     if version < MIN_SPLITRAIL_VERSION:
@@ -189,7 +194,7 @@ def _run_codex_reset_credit_read(executable: str, timeout_seconds: float) -> dic
             text=True,
             encoding="utf-8",
             errors="replace",
-            env={**os.environ, "NO_COLOR": "1", "TERM": "dumb"},
+            env={**external_command_env(), "NO_COLOR": "1", "TERM": "dumb"},
             **command_options(),
         )
     except FileNotFoundError as exc:
@@ -334,13 +339,13 @@ def _find_executable(env_name: str, command: str, fallback: Path) -> str:
     configured = os.environ.get(env_name)
     if configured:
         path = Path(configured).expanduser()
-        if path.is_file() and os.access(path, os.X_OK):
+        if path.is_file() and os.access(path, os.X_OK) and not is_desktop_executable(path):
             return str(path)
         raise MissingCommandError(f"{command} is not executable at {path}")
-    discovered = shutil.which(command)
+    discovered = path_executable(command)
     if discovered:
         return discovered
-    if fallback.is_file() and os.access(fallback, os.X_OK):
+    if fallback.is_file() and os.access(fallback, os.X_OK) and not is_desktop_executable(fallback):
         return str(fallback)
     raise MissingCommandError(f"{command} was not found. Expected an executable named '{command}'.")
 
@@ -358,6 +363,7 @@ def _run(arguments: tuple[str, ...], timeout_seconds: float, label: str) -> subp
             errors="replace",
             timeout=timeout_seconds,
             check=False,
+            env={**external_command_env(), "NO_COLOR": "1", "TERM": "dumb"},
             **command_options(),
         )
     except FileNotFoundError as exc:

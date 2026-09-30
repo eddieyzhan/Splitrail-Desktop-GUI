@@ -6,10 +6,58 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from splitrail_desktop.platform_support import prepare_desktop_path, command_options
+from splitrail_desktop.platform_support import (prepare_desktop_path, command_options,
+                                               path_executable, external_command_env)
 
 
 class PlatformTests(unittest.TestCase):
+    def test_path_discovery_skips_frozen_gui_and_preserves_collector_priority(self):
+        suffix = '.exe' if os.name == 'nt' else ''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            gui, first, second = (root / name for name in ('gui', 'first', 'second'))
+            for folder in (gui, first, second):
+                folder.mkdir()
+                executable = folder / ('splitrail' + suffix)
+                executable.touch()
+                executable.chmod(0o755)
+            with patch('splitrail_desktop.platform_support.sys.frozen', True, create=True), \
+                 patch('splitrail_desktop.platform_support.sys.executable', str(gui / ('splitrail' + suffix))), \
+                 patch.dict(os.environ, {'PATH': os.pathsep.join(map(str, (gui, first, second)))}):
+                self.assertEqual(Path(path_executable('splitrail')), first / ('splitrail' + suffix))
+                with patch.dict(os.environ, {'PATH': str(gui)}), \
+                     patch('splitrail_desktop.platform_support.prepare_desktop_path'):
+                    self.assertIsNone(path_executable('splitrail'))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows implicit current directory lookup')
+    def test_windows_gui_in_current_directory_does_not_shadow_collector(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            native, tools = root / 'native', root / 'tools'
+            for folder in (native, tools):
+                folder.mkdir()
+                (folder / 'splitrail.exe').touch()
+            previous = Path.cwd()
+            try:
+                os.chdir(native)
+                with patch.dict(os.environ, {'PATH': str(tools)}):
+                    self.assertEqual(Path(path_executable('splitrail')), tools / 'splitrail.exe')
+            finally:
+                os.chdir(previous)
+
+    def test_frozen_linux_child_library_path_is_restored_without_changing_qt(self):
+        for original in (None, '/system/libraries'):
+            with patch('splitrail_desktop.platform_support.sys.platform', 'linux'), \
+                 patch('splitrail_desktop.platform_support.sys.frozen', True, create=True), \
+                 patch.dict(os.environ, {'LD_LIBRARY_PATH': '/bundle/libraries'}):
+                os.environ.pop('LD_LIBRARY_PATH_ORIG', None)
+                if original is not None:
+                    os.environ['LD_LIBRARY_PATH_ORIG'] = original
+                environment = external_command_env()
+                self.assertEqual(environment.get('LD_LIBRARY_PATH'), original)
+                self.assertNotIn('LD_LIBRARY_PATH_ORIG', environment)
+                self.assertEqual(os.environ['LD_LIBRARY_PATH'], '/bundle/libraries')
+
     @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux executable discovery')
     def test_linux_desktop_finds_user_tools_and_preserves_path_priority(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -63,11 +63,14 @@ Flickable {
             }
         }
         Rectangle {
-            Layout.fillWidth: true; height: 92; radius: 20; color: AppStyle.surface
-            RowLayout { anchors.fill: parent; anchors.margins: 24; spacing: 20
-                ColumnLayout { spacing: 6; TextLabel { text: "Model pricing"; font.pixelSize: 16; font.weight: Font.DemiBold } TextLabel { text: "Built-in rates, with room for your own."; font.pixelSize: 12; color: AppStyle.muted } }
-                Item { Layout.fillWidth: true }
-                SoftButton { text: "Manage prices"; onClicked: page.pricingRequested() }
+            Layout.fillWidth: true; implicitHeight: pricingContent.implicitHeight+48; radius: 20; color: AppStyle.surface
+            ColumnLayout { id: pricingContent; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 24; spacing: 14
+                RowLayout { Layout.fillWidth: true; spacing: 20
+                    ColumnLayout { spacing: 6; Layout.fillWidth: true; TextLabel { text: "Model pricing"; font.pixelSize: 16; font.weight: Font.DemiBold } TextLabel { text: "Catalogue date: " + s.priceCatalogDate; font.pixelSize: 12; color: AppStyle.muted } }
+                    SoftButton { text: "Manage prices"; onClicked: page.pricingRequested() }
+                }
+                RowLayout { Layout.fillWidth: true; TextLabel { text: "Automatic price updates"; font.pixelSize: 13; Layout.fillWidth: true } SoftSwitch { objectName: "automaticPricesSwitch"; checked: s.automaticPrices; Accessible.name: "Automatic price updates"; onToggled: bridge.setAutomaticPrices(checked) } }
+                TextLabel { text: "Checks public prices daily. Works offline with saved prices; your custom rates take priority."; font.pixelSize: 11; color: AppStyle.muted; Layout.fillWidth: true; wrapMode: Text.WordWrap; elide: Text.ElideNone }
             }
         }
         Rectangle {

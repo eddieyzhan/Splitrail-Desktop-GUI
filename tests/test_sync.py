@@ -68,6 +68,9 @@ class GitHubSyncTests(unittest.TestCase):
         self.patch = patch('splitrail_desktop.sync._api', side_effect=self.api)
         self.patch.start()
         self.addCleanup(self.patch.stop)
+        prices = patch('splitrail_desktop.catalog_updates.refresh_prices', return_value=False)
+        prices.start()
+        self.addCleanup(prices.stop)
 
     def device(self, name, **options):
         directory = self.root / name

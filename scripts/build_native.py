@@ -39,6 +39,8 @@ def main() -> int:
     for arguments in (['--self-check'], ['--smoke-ui'], ['--smoke-ui', '--onboarding'],
                       ['--smoke-ui', '--quota'], ['--smoke-ui', '--limits']):
         subprocess.run([str(executable), *arguments], cwd=native, timeout=45, check=True)
+    from smoke_collector import check_collector
+    check_collector(executable, cwd=bundle if sys.platform != 'darwin' else executable.parent)
 
     # Keep notices alongside the bundle so macOS's ad-hoc signature stays intact.
     # A fresh staging directory cannot retain stale files from an earlier build.

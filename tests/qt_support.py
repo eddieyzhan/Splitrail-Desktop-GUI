@@ -35,6 +35,9 @@ class QtCase(unittest.TestCase):
         env = patch.dict(os.environ, {'SPLITRAIL_BIN': '/example/splitrail'})
         env.start()
         self.addCleanup(env.stop)
+        prices = patch('splitrail_desktop.desktop.refresh_prices', return_value=False)
+        prices.start()
+        self.addCleanup(prices.stop)
         # Any unexpected network/collector call fails the test, never uses a real account.
         for target in ('splitrail_desktop.sync._api', 'splitrail_desktop.sync.account',
                        'splitrail_desktop.desktop.run_quota_axi', 'splitrail_desktop.desktop.run_splitrail',

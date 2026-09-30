@@ -6,7 +6,7 @@ The **Codex usage tracker works on its own**. Tracking other tools requires the 
 
 [Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
 
-The dedicated **Limits** page is new in **1.2.1**. Until a 1.2.1 binary is published, use the [source installation](#run-from-source-or-contribute) for these controls; older release downloads do not contain them.
+**1.2.3** fixes collector discovery and All tools sync, adds GPT-6.1 Sol pricing and checks the shared price catalogue automatically. It includes the dedicated **Limits** page and reset protection.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -21,7 +21,7 @@ The dedicated **Limits** page is new in **1.2.1**. Until a 1.2.1 binary is publi
 | Open Codex CLI / app-server processes | Built-in local process monitor: PID, start time, executable, working directory and OS status. |
 | Codex weekly quota cutoff and reset protection | Fresh weekly data from `quota-axi`, selected local Codex processes, and an explicitly armed cutoff. Keep Splitrail open. |
 
-Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server or telemetry. **Costs are estimates, not provider bills or subscription charges.** The bundled price catalogue is an offline snapshot, and you can override rates locally.
+Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server or telemetry. **Costs are estimates, not provider bills or subscription charges.** Prices are bundled and cached locally; automatic daily checks of the public GitHub catalogue add models without an app update. Custom rates take priority. Turn these checks off under **Settings → Model pricing** for offline pricing.
 
 ## Quick start
 
@@ -108,6 +108,7 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 | Qt plugin or DLL fails to load on Windows | Update to 1.1.2 or newer, which registers Qt's DLL directory before loading QML. Extract the entire native ZIP; do not move just the executable. |
 | No usage appears | Select the correct source in **Settings → Usage & data** and confirm the source tool has local logs. For tools other than Codex, install Splitrail 3.9.1+ and make sure `splitrail --version` works. |
 | Collector is not found | Check PATH or set `SPLITRAIL_BIN` to its executable. The built-in Codex reader can still work without it. |
+| Sync says “Could not verify Splitrail version” even with the collector installed | Update the GUI to 1.2.3+. Windows could select the GUI's own `Splitrail.exe` from its launch folder; discovery now searches PATH explicitly and skips the GUI. `SPLITRAIL_BIN` must point to the separate collector. Version banners on stderr or with colour formatting are supported. Native Linux launches also restore the system library environment for external tools. |
 | A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → Model pricing → Manage prices**. Tokens remain visible for unknown models. |
 | An estimate differs from your bill | Estimates depend on saved usage and configured prices. They cannot reconstruct subscription charges, all service tiers or every billing surcharge. [Pricing details](docs/REFERENCE.md#pricing). |
 | GitHub sync fails | Confirm GitHub CLI is signed in (`gh auth status`), check repository access and ensure the repository is private. The last successfully downloaded totals are retained after a failed sync. |
@@ -151,6 +152,6 @@ On Windows PowerShell use `$env:PYTHONPATH='src'; python -m unittest discover -s
 
 To build a native archive on the target OS, install `scripts/requirements-release.txt`, then run `python scripts/build_native.py`. It bundles allowlisted application resources and the required Qt Quick modules, then tests both packaged screens using synthetic data before creating an archive. `codemagic.yaml` provides a **manual-only** macOS check with a 15-minute timeout; it has no automatic triggers or publishing secrets. Use a single run for a release after local checks pass.
 
-The **Native release checks** GitHub Actions workflow can also be run manually after local checks pass. It tests and builds Windows x86_64, Linux x86_64 and macOS ARM64 downloads using the pinned release dependencies. It has no push/tag/PR triggers or publishing credentials; artifacts expire after three days and are published separately after review.
+The **Native release checks** GitHub Actions workflow can also be run manually after local checks pass. Select a single platform to avoid repeating builds already verified locally, or choose **all** for a full release. It uses pinned release dependencies and checks the native collector/sync path as well as the UI. It has no push/tag/PR triggers or publishing credentials; artifacts expire after three days and are published separately after review.
 
 Application code is licensed under [MIT](LICENSE). Native downloads include Python, PySide6/Qt and ijson with [third-party notices](docs/THIRD_PARTY.md); the `.pyz` contains only application code and resources. Splitrail Desktop is an independent interface for [Splitrail](https://github.com/Piebald-AI/splitrail), not affiliated with AI model providers or GitHub.

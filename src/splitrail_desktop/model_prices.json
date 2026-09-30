@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "verified": "2026-09-25",
+  "verified": "2026-09-30",
   "currency": "USD",
   "unit": "per million tokens",
   "sources": {
@@ -20,6 +20,17 @@
     "gpt-5.3-codex-spark": "Research preview · public rate unavailable"
   },
   "models": {
+    "gpt-6.1-sol": {
+      "provider": "OpenAI",
+      "input": 2,
+      "output": 10,
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "long_context_threshold": 272000,
+      "long_input_multiplier": 2,
+      "long_output_multiplier": 1.5,
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+    },
     "gpt-6-astra": {
       "provider": "OpenAI",
       "input": 10,

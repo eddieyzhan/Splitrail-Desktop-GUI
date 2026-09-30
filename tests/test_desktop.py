@@ -18,6 +18,20 @@ from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def test_price_update_preference_is_saved_and_controls_worker_downloads(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        with patch('splitrail_desktop.desktop.run_splitrail', return_value=demo.usage()), \
+             patch('splitrail_desktop.desktop.run_quota_axi', return_value=QuotaCommandResult(demo.quota(), 0)), \
+             patch('splitrail_desktop.combined.run_combined_usage', return_value=demo.usage()), \
+             patch('splitrail_desktop.desktop.refresh_prices', return_value=False) as prices:
+            for enabled in (False, True):
+                c.setAutomaticPrices(enabled)
+                self.wait_for(lambda: not c.state['busy'] and not c.state['quotaBusy'])
+                self.assertEqual(preferences.load()['automatic_prices'], enabled)
+                self.assertEqual(c.state['automaticPrices'], enabled)
+                prices.assert_called_with(allow_network=enabled)
+
     def prepare_guard(self):
         c = self.controller
         c._state['onboarding'] = False

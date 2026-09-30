@@ -20,6 +20,7 @@ sync-device.json
 preferences.json
 github-devices.json
 model-prices.json
+price-catalog.json
 *.jsonl
 *.sqlite*
 *.db

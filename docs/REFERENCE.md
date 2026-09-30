@@ -18,7 +18,9 @@ Hourly buckets use each source device’s local calendar date and clock hour, ma
 
 ## Pricing
 
-Built-in rates cover common OpenAI/Codex, Anthropic/Claude, Google/Gemini and xAI/Grok models. `model_prices.json` includes provider source links and a verification date. The catalogue is an offline snapshot, not a live pricing feed. Check the provider's current rates before relying on an estimate.
+Built-in rates cover common OpenAI/Codex, Anthropic/Claude, Google/Gemini and xAI/Grok models. The public [`model_prices.json`](../src/splitrail_desktop/model_prices.json) is the shared catalogue, with provider source links and a verification date. During usage refresh the app checks this file on GitHub at most once per day, validates it and caches it locally. New models can receive rates without another app release. Failed or incompatible downloads keep the last valid rates; failures retry after an hour. Disable **Settings → Model pricing → Automatic price updates** to use saved/bundled rates without these requests. Demo mode never downloads prices.
+
+GPT-6.1 Sol standard rates are $2 input, $0.10 cache reads, $2.50 cache writes and $10 output per million tokens. Requests exceeding 272,000 input tokens use 2× input/cache and 1.5× output rates when request-level usage is available. These are separate from GPT-6 Sol's $0.20 cache-read rate. [Official GPT-6.1 Sol rates](https://developers.openai.com/api/docs/models/gpt-6.1-sol).
 
 Prices are USD per million tokens. Custom rates override matching models locally; `0` means free, and unused cache fields can stay blank. Existing nonzero collector estimates are preserved unless overridden. Missing costs are filled from the catalogue. Gemini aliases are normalized, cache tokens are charged once, and reasoning already included in output is not charged again.
 
@@ -52,7 +54,7 @@ Application data is stored under:
 | Windows | `%LOCALAPPDATA%/splitrail-desktop` |
 | macOS | `~/Library/Application Support/splitrail-desktop` |
 
-`preferences.json` stores appearance, onboarding state and quota cutoff percentages; `model-prices.json` stores custom rates. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
+`preferences.json` stores appearance, onboarding state, automatic price-update preference and quota cutoff percentages; `model-prices.json` stores custom rates and `price-catalog.json` caches validated public prices and their last successful check time. `github-sync-v2.json` holds the repository and sync options, `sync-device.json` the random device identity, and `github-devices.json` downloaded aggregates. No credentials are stored by Splitrail. Files are written atomically with user-only permissions where the OS supports them.
 
 The app streams `splitrail stats --include-messages` to calculate hourly activity from normalized timestamp/token/cost statistics. It retains only aggregate fields: session names, IDs, project metadata and unexpected content are discarded in memory, and the source records are never saved or synced. The collector’s daily totals remain authoritative; request-level cost precision can cause small rounding differences in hourly sums. Inconsistent hourly reasoning counts are omitted from the chart and sync’s optional hourly detail, while daily and model totals remain intact. Notifications explain any hourly coverage gap. The built-in reader scans `CODEX_HOME` (default `~/.codex`) and Codex-authenticated Pi logs in `~/.pi/agent/sessions`, extracting usage records only. It does not modify source logs. Codex totals count input plus output; reasoning is a subset of output.
 

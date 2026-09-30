@@ -154,6 +154,18 @@ class SafeCommandRunnerTests(unittest.TestCase):
             run_splitrail()
         run_mock.assert_called_once_with(("/safe/splitrail", "--version"), 5, "Splitrail version check")
 
+    @patch("splitrail_desktop.runner._run")
+    def test_version_banner_accepts_stderr_ansi_and_build_metadata(self, run_mock):
+        for stdout, stderr in (("", "splitrail 3.10.3\n"),
+                               ("\x1b[32msplitrail v3.10.3+build\x1b[0m\n", ""),
+                               ("Notice: checking installation\nSplitrail 3.10.3\n", "")):
+            with self.subTest(stdout=stdout, stderr=stderr):
+                run_mock.return_value = subprocess.CompletedProcess([], 0, stdout, stderr)
+                _check_splitrail_version("/safe/splitrail", 5)
+        run_mock.return_value = subprocess.CompletedProcess([], 0, "Splitrail Desktop 1.2.3\n", "")
+        with self.assertRaisesRegex(LocalCommandError, 'SPLITRAIL_BIN'):
+            _check_splitrail_version("/safe/gui", 5)
+
     def test_unknown_model_diagnostics_preserve_decimal_versions(self) -> None:
         diagnostics = analyze_splitrail_stderr(
             "WARNING: Unknown model: gpt-5.3-codex-spark. Defaulting to $0.\n"

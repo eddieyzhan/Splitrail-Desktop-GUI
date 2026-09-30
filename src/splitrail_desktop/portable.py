@@ -19,7 +19,6 @@ from pathlib import Path
 from .domain import DailyUsage, HourlyUsage, ModelDetail, TokenUsage, UsageDataset
 
 SCHEMA = "splitrail-codex-usage-v1"
-PRICE_DATE = "2026-09-22"
 PRICE_SOURCE = "https://developers.openai.com/api/docs/pricing"
 MAX_IMPORT_BYTES = 100 * 1024 * 1024
 FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens",
@@ -203,8 +202,9 @@ def scan_codex(root: Path | None = None, pi_root: Path | None = None) -> dict:
                     diagnostics["pi_records"] += 1
                 except (KeyError, ValueError, TypeError):
                     diagnostics["invalid_pi_lines"] += 1
+    from .pricing import CATALOG
     return {"schema": SCHEMA, "exported_at": datetime.now(timezone.utc).isoformat(),
-            "pricing_as_of": PRICE_DATE, "pricing_source": PRICE_SOURCE,
+            "pricing_as_of": CATALOG['verified'], "pricing_source": PRICE_SOURCE,
             "diagnostics": dict(diagnostics), "events": sorted(events.values(), key=lambda e: (e["timestamp"], e["id"]))}
 
 

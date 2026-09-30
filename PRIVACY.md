@@ -8,6 +8,10 @@ The dashboard reads local usage and optional quota tools. To show hourly charts,
 
 The optional Codex process monitor reads local OS process metadata, including PID, owner, executable, start time, working directory and status. It briefly inspects command arguments to classify the engine, but never retains or displays arguments. Process details and cutoff selections remain in memory and are never exported or synced. Only the chosen cutoff percentages are saved in local preferences. Arming a cutoff explicitly authorizes terminating protected local Codex engines; it starts off each time the app opens. Quota readings remain local and the app never consumes reset credits.
 
+## Public price updates
+
+Automatic price updates download the same public model-price catalogue from this project's GitHub repository for every device, at most daily during usage refresh. They use a plain HTTPS request without GitHub sign-in, authentication tokens, cookies, usage totals or model-specific queries. GitHub receives ordinary connection metadata such as your IP address. Validated prices are cached in `price-catalog.json`; custom rates remain in `model-prices.json` and take priority. Disable **Settings → Model pricing → Automatic price updates** for offline pricing. Demo mode never makes these requests.
+
 ## Optional GitHub sync
 
 Connecting GitHub and enabling data sharing are explicit actions. GitHub CLI handles authentication; its browser flow shows a one-time code, never an access token, in the app. The app neither reads credential files nor calls `gh auth token`. GitHub CLI may use a plaintext credential fallback where an OS credential store is unavailable; consult its documentation.

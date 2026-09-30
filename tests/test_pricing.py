@@ -58,6 +58,20 @@ class PricingTests(unittest.TestCase):
         )
         self.assertIsNone(resolve_rates('gpt-5.3-codex-spark'))
 
+    def test_gpt_6_1_sol_rates_aliases_and_request_context_threshold(self):
+        for name in ('gpt-6.1-sol', 'openai/gpt-6.1-sol', 'openai-codex/gpt-6.1-sol-latest',
+                     'gpt-6.1-sol-2026-09-30'):
+            rate = resolve_rates(name)
+            self.assertEqual({key: rate[key] for key in ('input', 'cache_read', 'cache_write', 'output')},
+                             {'input': 2, 'cache_read': .1, 'cache_write': 2.5, 'output': 10})
+        for inp, expected in ((272000, .464), (272001, .878004)):
+            event = make_event('request', 'session', '2026-09-30T00:00:00Z', 'gpt-6.1-sol',
+                               dict(input_tokens=inp, cached_input_tokens=100000,
+                                    cache_write_input_tokens=20000, output_tokens=10000,
+                                    reasoning_output_tokens=5000))
+            self.assertAlmostEqual(estimate_cost(event), expected)
+        self.assertEqual(resolve_rates('gpt-6-sol')['cache_read'], .2)
+
     def test_gemini_cost_includes_thinking_and_cache_once(self):
         original = dataset()
         updated, resolved, unknown = reprice_dataset(original)

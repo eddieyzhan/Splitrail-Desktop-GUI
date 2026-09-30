@@ -3,6 +3,16 @@ name: Native release checks
 # Build only when explicitly requested; publishing remains a separate step.
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platform to build (choose one when others were tested locally)
+        type: choice
+        default: all
+        options:
+          - all
+          - linux-x86_64
+          - windows-x86_64
+          - macos-arm64
 
 permissions:
   contents: read
@@ -10,21 +20,12 @@ permissions:
 jobs:
   native:
     name: ${{ matrix.platform }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform == 'linux-x86_64' && 'ubuntu-22.04' || matrix.platform == 'windows-x86_64' && 'windows-2022' || 'macos-14' }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: linux-x86_64
-            runner: ubuntu-22.04
-            archive: dist/splitrail-desktop-linux-x86_64.tar.gz
-          - platform: windows-x86_64
-            runner: windows-2022
-            archive: dist/splitrail-desktop-windows-x86_64.zip
-          - platform: macos-arm64
-            runner: macos-14
-            archive: dist/splitrail-desktop-macos-arm64.zip
+        platform: ${{ inputs.platform == 'all' && fromJSON('["linux-x86_64","windows-x86_64","macos-arm64"]') || fromJSON(format('["{0}"]', inputs.platform)) }}
     env:
       PYTHONPATH: src
       QT_QPA_PLATFORM: offscreen
@@ -57,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-${{ matrix.platform }}
-          path: ${{ matrix.archive }}
+          path: dist/splitrail-desktop-${{ matrix.platform }}.${{ matrix.platform == 'linux-x86_64' && 'tar.gz' || 'zip' }}
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
