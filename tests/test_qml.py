@@ -289,6 +289,12 @@ class QmlTests(QtCase):
             for page in ('Models', 'Tools', 'History', 'Quota', 'Limits', 'Settings', 'Overview'):
                 dashboard.setProperty('page', page)
                 QTest.qWait(60)
+                # Offscreen macOS does not reliably schedule a render frame in
+                # 60 ms. Finish delegates before destroying their page context.
+                incubator = self.engine.incubationController()
+                if incubator:
+                    incubator.incubateFor(100)
+                    self.assertEqual(incubator.incubatingObjectCount(), 0)
             for name in ('datePicker', 'priceEditor', 'notificationsPopup'):
                 popup = self.item(name)
                 QMetaObject.invokeMethod(popup, 'open')
