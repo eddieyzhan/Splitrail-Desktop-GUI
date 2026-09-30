@@ -24,7 +24,7 @@ class PlatformTests(unittest.TestCase):
             with patch('splitrail_desktop.platform_support.sys.frozen', True, create=True), \
                  patch('splitrail_desktop.platform_support.sys.executable', str(gui / ('splitrail' + suffix))), \
                  patch.dict(os.environ, {'PATH': os.pathsep.join(map(str, (gui, first, second)))}):
-                self.assertEqual(Path(path_executable('splitrail')), first / ('splitrail' + suffix))
+                self.assertEqual(Path(path_executable('splitrail')), (first / ('splitrail' + suffix)).resolve())
                 with patch.dict(os.environ, {'PATH': str(gui)}), \
                      patch('splitrail_desktop.platform_support.prepare_desktop_path'):
                     self.assertIsNone(path_executable('splitrail'))
