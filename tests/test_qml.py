@@ -75,6 +75,34 @@ class QmlTests(QtCase):
         QTest.qWait(30)
         return self.item('dashboardView')
 
+    def test_sync_intervals_save_and_reload_with_validated_hours(self):
+        dashboard = self.dashboard()
+        with patch('splitrail_desktop.sync._private_repo', return_value={'private': True}):
+            sync.configure('example/private', automatic=True)
+        self.controller._load_settings()
+        self.controller._emit()
+        dashboard.setProperty('page', 'Settings')
+        QTest.qWait(30)
+        self.assertEqual(self.item('syncIntervalHours').property('text'), '1')
+        self.assertEqual(self.item('syncIdleHours').property('text'), '3')
+        self.assertFalse(self.item('saveSyncTiming').property('enabled'))
+        self.item('syncIntervalHours').setProperty('text', '2')
+        self.item('syncIdleHours').setProperty('text', '6')
+        with patch.object(self.controller, 'refresh'):
+            self.click('saveSyncTiming')
+            self.wait_for(lambda: not self.controller.state['syncBusy'])
+        self.assertEqual(sync.settings()['interval_hours'], 2)
+        self.assertEqual(sync.settings()['idle_hours'], 6)
+        dashboard.setProperty('page', 'Overview')
+        QTest.qWait(30)
+        dashboard.setProperty('page', 'Settings')
+        QTest.qWait(30)
+        self.assertEqual(self.item('syncIntervalHours').property('text'), '2')
+        self.assertEqual(self.item('syncIdleHours').property('text'), '6')
+        for value in ('', '0', '1', '169'):
+            self.item('syncIdleHours').setProperty('text', value)
+            self.assertFalse(self.item('saveSyncTiming').property('enabled'))
+
     def test_weekly_pace_marker_appears_on_both_quota_bars(self):
         self.dashboard()
         now = datetime.now(timezone.utc)

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from splitrail_desktop.desktop import DesktopController
+from splitrail_desktop.worker import execute
 
 QQuickStyle.setStyle('Basic')
 APP = QApplication.instance() or QApplication([])
@@ -40,7 +41,7 @@ class QtCase(unittest.TestCase):
         self.addCleanup(prices.stop)
         # Any unexpected network/collector call fails the test, never uses a real account.
         for target in ('splitrail_desktop.sync._api', 'splitrail_desktop.sync.account',
-                       'splitrail_desktop.desktop.run_quota_axi', 'splitrail_desktop.desktop.run_splitrail',
+                       'splitrail_desktop.desktop.run_quota_axi', 'splitrail_desktop.runner.run_splitrail',
                        'splitrail_desktop.desktop.stop_codex_processes'):
             guard = patch(target, side_effect=AssertionError('Unexpected external operation'))
             guard.start()
@@ -48,7 +49,18 @@ class QtCase(unittest.TestCase):
         scanner = patch('splitrail_desktop.desktop.discover_codex_processes', return_value=())
         scanner.start()
         self.addCleanup(scanner.stop)
+        probe = patch('splitrail_desktop.desktop.codex_activity_stamp', return_value='unchanged')
+        probe.start()
+        self.addCleanup(probe.stop)
         self.controller = DesktopController(auto_refresh=False)
+        # Controller tests keep their synthetic engines in-process. Separate
+        # integration tests exercise the real helper, protocol and cancellation.
+        worker = patch.object(self.controller._worker, 'run', side_effect=lambda task, **options: execute(task, options))
+        worker.start()
+        self.addCleanup(worker.stop)
+        catalog = patch('splitrail_desktop.catalog_updates.refresh_prices', return_value=False)
+        catalog.start()
+        self.addCleanup(catalog.stop)
         self.addCleanup(self.controller.close)
 
     def wait_for(self, predicate):

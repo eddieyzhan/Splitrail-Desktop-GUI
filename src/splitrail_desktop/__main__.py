@@ -16,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--smoke-collector", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--smoke-ui", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument('--worker', nargs=2, help=argparse.SUPPRESS)
     parser.add_argument("--codex-usage", action="store_true", help="Show deduplicated Codex usage across devices")
     pages = parser.add_mutually_exclusive_group()
     pages.add_argument("--quota", action="store_true", help="Open Codex quota details")
@@ -26,8 +27,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--receive-only", action="store_true", help="Receive usage from other devices; never upload this computer's usage")
     parser.add_argument("--sync-usage", action="store_true", help="Sync device usage now and exit")
     parser.add_argument('--sync-codex-only', action='store_true', help='Sync Codex totals without the Splitrail collector')
-    parser.add_argument('--auto-sync', action='store_true', help='Opt in to sync on usage refresh')
+    parser.add_argument('--auto-sync', action='store_true', help='Opt in to scheduled sync (1 hour; 3 hours if unchanged)')
     args = parser.parse_args(argv)
+    if args.worker:
+        from .worker import worker_main
+        return worker_main(*args.worker)
     if args.smoke_collector:
         # Build-only check with an isolated synthetic collector on PATH.
         from .runner import run_splitrail
@@ -39,7 +43,15 @@ def main(argv: list[str] | None = None) -> int:
         assert abs(result.dataset.days[0].cost - 3.05) < 1e-9
         payload = _collect({'scope': 'all', 'device': 'a' * 32})
         assert decode_dataset(payload).days == result.dataset.days
-        print('External collector discovery, pricing and All tools sync payload passed')
+        from .worker import BackgroundWorker
+        worker = BackgroundWorker()
+        try:
+            for include_hours in (False, True):
+                isolated = worker.run('usage', mode='local', automatic_prices=False, include_hours=include_hours)
+                assert isolated.dataset.days == result.dataset.days
+        finally:
+            worker.close()
+        print('External collector discovery, pricing, background helper and All tools sync payload passed')
         return 0
     if args.setup_sync or args.sync_usage or args.export_usage or args.import_usage:
         from .catalog_updates import refresh_prices

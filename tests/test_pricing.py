@@ -33,6 +33,9 @@ class PricingTests(unittest.TestCase):
         patcher = patch('splitrail_desktop.portable.data_dir', return_value=self.directory)
         patcher.start()
         self.addCleanup(patcher.stop)
+        history_dir = patch('splitrail_desktop.history.data_dir', return_value=self.directory)
+        history_dir.start()
+        self.addCleanup(history_dir.stop)
 
     def test_gemini_aliases_include_provider_and_version_variants(self):
         for name in ('gemini-3.8-flash', 'antigravity/gemini-3-8-flash', 'google/gemini-3.8-flash', 'models/gemini-3.8-flash'):
@@ -180,7 +183,8 @@ class PricingTests(unittest.TestCase):
              patch('splitrail_desktop.runner._check_splitrail_version'), \
              patch('splitrail_desktop.activity.read_collector', return_value=(
                  parse_stats_payload(payload),
-                 0, completed.stderr)):
+                 0, completed.stderr)), \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value={'events': [], 'diagnostics': {}}):
             result = run_splitrail()
         self.assertAlmostEqual(result.dataset.days[0].cost, 1.125)
         self.assertEqual(result.cost_diagnostics.unknown_models, ('unrecoverable-model',))

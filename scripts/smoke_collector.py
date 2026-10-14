@@ -25,7 +25,7 @@ def check_collector(executable: Path, *, cwd: Path) -> None:
             'import sys\n'
             'if sys.argv[1:] == ["--version"]:\n'
             '    print("splitrail 3.10.3", file=sys.stderr)\n'
-            'elif sys.argv[1:] == ["stats", "--include-messages"]:\n'
+            'elif sys.argv[1:] in (["stats"], ["stats", "--include-messages"]):\n'
             f'    print({json.dumps(payload)!r})\n'
             '    print("Unknown model: gpt-6.1-sol. Defaulting to $0.", file=sys.stderr)\n'
             'else:\n    raise SystemExit(2)\n', encoding='utf-8')
@@ -37,6 +37,7 @@ def check_collector(executable: Path, *, cwd: Path) -> None:
             collector.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, str(script)]) + ' "$@"\n')
             collector.chmod(0o755)
         environment = {**os.environ, 'PATH': str(root) + os.pathsep + os.environ.get('PATH', os.defpath),
+                       'CODEX_HOME': str(root / 'codex'),
                        'LOCALAPPDATA': str(root / 'data'), 'XDG_DATA_HOME': str(root / 'data')}
         environment.pop('SPLITRAIL_BIN', None)
         subprocess.run([str(executable.resolve()), '--smoke-collector'], cwd=cwd,

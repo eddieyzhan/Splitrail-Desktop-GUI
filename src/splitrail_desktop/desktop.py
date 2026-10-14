@@ -5,10 +5,11 @@ import calendar
 import os
 import shutil
 import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl
+from PySide6.QtCore import QObject, Property, Signal, Slot, QTimer, QUrl, Qt
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QFileDialog
 
@@ -19,8 +20,10 @@ from .presentation import (build_chart_buckets, chart_series, hourly_chart_bucke
 from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_override
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
-from .refresh import AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS
-from .runner import run_splitrail, run_quota_axi, SPLITRAIL_FALLBACK, _find_executable, MissingCommandError
+from .refresh import (AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS,
+                      ACTIVITY_CHECK_SECONDS, codex_activity_stamp)
+from .runner import run_quota_axi, SPLITRAIL_FALLBACK, _find_executable, MissingCommandError
+from .worker import BackgroundWorker
 from .catalog_updates import refresh_prices
 from .processes import CodexProcess, discover_codex_processes, stop_codex_processes
 from .quota_guard import QuotaGuard, QuotaLimits, PROCESS_REFRESH_SECONDS
@@ -69,6 +72,13 @@ class DesktopController(QObject):
         self.quota_snapshot = None
         self.usage_result = None
         self._tasks = {}
+        self._worker = BackgroundWorker()
+        self._last_usage_tick = None
+        self._activity_stamp = None
+        self._quota_stamp = None
+        self._activity_during_refresh = False
+        self._usage_includes_hours = False
+        self._hourly_detail_current = False
         self._notifications = {}
         self._setup_generation = 0
         self._auth_cancel = threading.Event()
@@ -82,6 +92,16 @@ class DesktopController(QObject):
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.refresh)
+        self._activity_timer = QTimer(self)
+        self._activity_timer.setInterval(ACTIVITY_CHECK_SECONDS * 1000)
+        self._activity_timer.timeout.connect(self._check_activity)
+        if auto_refresh and not demo:
+            self._activity_timer.start()
+            QTimer.singleShot(0, self._check_activity)
+        self._sync_timer = QTimer(self)
+        self._sync_timer.setSingleShot(True)
+        self._sync_timer.setTimerType(Qt.PreciseTimer)
+        self._sync_timer.timeout.connect(self._auto_sync)
         self._quota_timer = QTimer(self)
         self._quota_timer.setSingleShot(True)
         self._quota_timer.timeout.connect(self.refreshQuota)
@@ -135,6 +155,7 @@ class DesktopController(QObject):
             'automaticPrices': prefs.get('automatic_prices', True) is not False,
             'priceCatalogDate': CATALOG['verified'],
             'connected': False, 'repository': '', 'automatic': False, 'receiveOnly': False,
+            'syncIntervalHours': sync.DEFAULT_INTERVAL_HOURS, 'syncIdleHours': sync.DEFAULT_IDLE_HOURS,
             'syncScope': 'all' if collector else 'codex', 'syncStatus': 'Only on this device',
             'period': 'This month', 'range': '', 'start': '', 'end': '', 'preset': 'Month',
             'canNext': True, 'canPrevious': True, 'summary': {}, 'chart': [],
@@ -293,10 +314,65 @@ class DesktopController(QObject):
             self._state.update(connected=bool(config), repository=config['repository'] if config else '',
                                automatic=config['automatic'] if config else False,
                                receiveOnly=config['receive_only'] if config else False,
+                               syncIntervalHours=config['interval_hours'] if config else sync.DEFAULT_INTERVAL_HOURS,
+                               syncIdleHours=config['idle_hours'] if config else sync.DEFAULT_IDLE_HOURS,
                                syncScope=config['scope'] if config else self._state['syncScope'],
                                syncStatus=sync.status_text())
         except (ValueError, OSError, sync.SyncError, TypeError):
             self._state['settingsError'] = 'Sync settings need attention. Disconnect to reset them.'
+        self._schedule_sync()
+
+    def _schedule_sync(self):
+        self._sync_timer.stop()
+        if self.closed or self.demo or not self.auto_refresh or self._state['onboarding']:
+            return
+        try:
+            delay = sync.seconds_until_auto_sync()
+        except (ValueError, OSError, sync.SyncError, TypeError):
+            return
+        if delay is not None:
+            self._sync_timer.start(max(1, delay) * 1000)
+
+    @Slot()
+    def _auto_sync(self):
+        if self.closed or self.demo or not self.auto_refresh or self._state['onboarding']:
+            return
+        if self._state['busy'] or self._state['syncBusy']:
+            self._sync_timer.start(1000)
+            return
+        self._sync_timer.stop()
+        self._state.update(syncBusy=True, settingsError='')
+        self._run('auto-sync', lambda: self._worker.run('sync', automatic=True))
+        self._emit()
+
+    def _check_activity(self):
+        if self.closed or self.demo or not self.auto_refresh or self._state['onboarding']:
+            return
+        self._run('activity', codex_activity_stamp)
+
+    def _note_activity(self):
+        if self.demo or not self.auto_refresh or self._state['onboarding']:
+            return
+        self._policy.record_activity()
+        if 'usage' in self._tasks:
+            self._activity_during_refresh = True
+            return
+        if self._last_usage_tick is None:
+            return
+        # Further activity must never push an already scheduled refresh back.
+        due = self._last_usage_tick + self._policy.fast_interval_seconds
+        delay = max(1, int((due - time.monotonic()) * 1000))
+        if not self._timer.isActive() or self._timer.remainingTime() > delay:
+            self._timer.start(delay)
+
+    def _needs_hours(self):
+        start, end = self._custom_range or shifted_range(self._preset, self._offset, date.today(), self.dataset)
+        return start == end
+
+    def _ensure_hourly_detail(self):
+        if (self.auto_refresh and not self.demo and self._state['hasUsage'] and
+                not self._hourly_detail_current and self._needs_hours() and 'usage' not in self._tasks):
+            self.refresh()
 
     def _run(self, kind, callback, generation=-1):
         if self.closed or (kind in self._tasks and not (kind in ('account', 'auth') and self._tasks[kind] != generation)):
@@ -314,7 +390,11 @@ class DesktopController(QObject):
 
     @Slot()
     def refresh(self):
-        if self.demo or self._state['onboarding'] or self._state['syncBusy']:
+        if self.closed or self.demo or self._state['onboarding']:
+            return
+        if self._state['syncBusy']:
+            if self.auto_refresh:
+                self._timer.start(1000)
             return
         if 'usage' not in self._tasks:
             self._timer.stop()
@@ -322,15 +402,12 @@ class DesktopController(QObject):
             mode = self._state['usageMode']
             generation = self._usage_generation
             automatic_prices = self._state['automaticPrices']
+            include_hours = self._needs_hours()
+            self._usage_includes_hours = include_hours or mode == 'codex'
+            self._activity_during_refresh = False
             def collect():
-                refresh_prices(allow_network=automatic_prices)
-                if mode == 'combined':
-                    from .combined import run_combined_usage
-                    return run_combined_usage()
-                if mode == 'codex':
-                    from .portable import run_portable_usage
-                    return run_portable_usage()
-                return run_splitrail()
+                return self._worker.run('usage', mode=mode, automatic_prices=automatic_prices,
+                                        include_hours=include_hours)
             self._run('usage', collect, generation)
         self._start_quota_refresh()
         self._emit()
@@ -352,8 +429,11 @@ class DesktopController(QObject):
         self.usage_result = result
         self.dataset = result.dataset
         self._last_refresh = datetime.now(timezone.utc)
+        self._last_usage_tick = time.monotonic()
         self._state.update(hasUsage=True, displayedMode=self._state['usageMode'])
         self._policy.record_success(self.dataset)
+        if self._activity_during_refresh:
+            self._policy.record_activity()
         self._notifications.pop('usage', None)
         diag = result.cost_diagnostics
         if diag.unknown_models:
@@ -376,6 +456,12 @@ class DesktopController(QObject):
             return
         if kind in ('account', 'auth', 'connect') and generation != self._setup_generation:
             return
+        if kind == 'activity':
+            if not error:
+                if self._activity_stamp is not None and value != self._activity_stamp:
+                    self._note_activity()
+                self._activity_stamp = value
+            return
         if kind == 'usage':
             self._state['busy'] = False
             if generation != self._usage_generation:
@@ -389,19 +475,28 @@ class DesktopController(QObject):
                     detail += '\nShowing the previous ' + source[self._state['displayedMode']] + ' snapshot.'
                 self._notice('usage', 'Usage could not refresh', detail)
             else:
+                self._hourly_detail_current = self._usage_includes_hours
                 self._accept_usage(value)
+            refresh_prices(allow_network=False)
             self.loadPrices()
             if self.auto_refresh:
                 self._timer.start(self._policy.interval_seconds * 1000)
             if self._pricing_pending:
                 self._pricing_pending = False
                 self.refresh()
+            elif not error:
+                self._ensure_hourly_detail()
         elif kind == 'quota':
             self._state['quotaBusy'] = False
             if error:
                 self._notice('quota', 'Quota is unavailable', str(error))
             else:
                 self._notifications.pop('quota', None)
+                if not value.snapshot.stale:
+                    stamp = tuple((w.window_id, w.percent_used, w.resets_at) for w in value.snapshot.windows)
+                    if self._quota_stamp is not None and stamp != self._quota_stamp:
+                        self._note_activity()
+                    self._quota_stamp = stamp
                 self.quota_snapshot = preserve_banked_resets(value.snapshot, self.quota_snapshot)
                 self._guard.observe(value.snapshot)
                 self._enforce_guard()
@@ -450,7 +545,7 @@ class DesktopController(QObject):
             else:
                 self._load_settings()
                 self._state.update(setupStage='ready', setupError='')
-        elif kind in ('sync', 'sync-settings', 'disconnect'):
+        elif kind in ('sync', 'auto-sync', 'sync-settings', 'disconnect'):
             self._state['syncBusy'] = False
             if error:
                 self._state['settingsError'] = str(error) if isinstance(error, sync.SyncError) else 'Unable to sync. Check your connection and local usage tools.'
@@ -458,9 +553,10 @@ class DesktopController(QObject):
             else:
                 self._state['settingsError'] = ''
                 self._notifications.pop('sync', None)
-                self._load_settings()
                 if kind == 'disconnect':
                     self._state.update(connected=False, repository='', automatic=False, receiveOnly=False)
+            self._load_settings()
+            if kind != 'auto-sync' or value or error:
                 self.refresh()
         elif kind in ('export', 'import', 'remove-imports'):
             self._state['transferBusy'] = False
@@ -573,6 +669,7 @@ class DesktopController(QObject):
             return
         self._preset, self._offset, self._custom_range = preset, 0, None
         self._render()
+        self._ensure_hourly_detail()
 
     @Slot(int)
     def cyclePeriod(self, direction):
@@ -597,6 +694,7 @@ class DesktopController(QObject):
                 return
             self._offset = offset
         self._render()
+        self._ensure_hourly_detail()
 
     @Slot(str, str, result=bool)
     def chooseDates(self, first, last):
@@ -608,6 +706,7 @@ class DesktopController(QObject):
             return False
         self._custom_range = (start, end)
         self._render()
+        self._ensure_hourly_detail()
         return True
 
     @Slot(str)
@@ -632,6 +731,8 @@ class DesktopController(QObject):
     @Slot()
     def beginSetup(self):
         self._timer.stop()
+        self._activity_timer.stop()
+        self._sync_timer.stop()
         if not self._guard.armed:
             self._quota_timer.stop()
         self._auth_cancel.set()
@@ -713,6 +814,9 @@ class DesktopController(QObject):
         self._auth_cancel.set()
         self._setup_generation += 1
         self._state.update(onboarding=False, setupBusy=False, setupError='')
+        if self.auto_refresh and not self.demo:
+            self._activity_timer.start()
+            self._check_activity()
         if not self.demo:
             preferences.save(onboarded=True)
         self._load_settings()
@@ -750,7 +854,8 @@ class DesktopController(QObject):
         if self._state['busy'] or self._state['syncBusy']:
             return
         self._state.update(syncBusy=True, settingsError='')
-        self._run('sync', sync.sync_now)
+        self._sync_timer.stop()
+        self._run('sync', lambda: self._worker.run('sync', automatic=False))
         self._emit()
 
     @Slot(bool, bool, str)
@@ -760,6 +865,20 @@ class DesktopController(QObject):
         repository = self._state['repository']
         self._state.update(syncBusy=True, settingsError='')
         self._run('sync-settings', lambda: sync.configure(repository, automatic=automatic, receive_only=receive_only, scope=scope))
+        self._emit()
+
+    @Slot(str, str)
+    def updateSyncTiming(self, interval, idle):
+        if self.demo or not self._state['connected'] or self._state['syncBusy']:
+            return
+        try:
+            interval_hours, idle_hours = int(interval), int(idle)
+        except ValueError:
+            self._state['settingsError'] = 'Use 1–168 hours; “If unchanged” must be at least “Every”.'
+            self._emit()
+            return
+        self._state.update(syncBusy=True, settingsError='')
+        self._run('sync-settings', lambda: sync.set_intervals(interval_hours, idle_hours))
         self._emit()
 
     @Slot()
@@ -840,22 +959,15 @@ class DesktopController(QObject):
     def transfer(self, action):
         if self.demo or self._state['transferBusy']:
             return
-        from .portable import scan_codex, write_export, import_export, data_dir
         if action == 'export':
             path, _ = QFileDialog.getSaveFileName(None, 'Export Codex usage', 'codex-usage.json.gz', 'Usage (*.json.gz)')
-            def work():
-                payload = scan_codex()
-                write_export(Path(path), payload)
-                return f"{len(payload['events']):,} requests exported"
         elif action == 'import':
             path, _ = QFileDialog.getOpenFileName(None, 'Import Codex usage', '', 'Usage (*.json.gz *.json)')
-            def work():
-                return f'{import_export(Path(path)):,} new requests added'
         else:
             return
         if path:
             self._state['transferBusy'] = True
-            self._run(action, work)
+            self._run(action, lambda: self._worker.run(action, path=path))
             self._emit()
 
     @Slot()
@@ -880,10 +992,13 @@ class DesktopController(QObject):
     @Slot()
     def close(self):
         self.closed = True
+        self._worker.close()
         self._guard_cancel.set()
         self._guard.disarm()
         self._process_timer.stop()
         self._auth_cancel.set()
         self._timer.stop()
+        self._activity_timer.stop()
         self._quota_timer.stop()
+        self._sync_timer.stop()
         self._clock.stop()

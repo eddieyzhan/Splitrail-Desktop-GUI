@@ -26,6 +26,8 @@ FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens",
 
 
 def data_dir() -> Path:
+    if os.environ.get('SPLITRAIL_DATA_DIR'):
+        return Path(os.environ['SPLITRAIL_DATA_DIR'])
     base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) if os.name == "nt" else Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
     if sys.platform == "darwin":
         base = Path.home() / "Library/Application Support"
@@ -71,7 +73,7 @@ def make_event(identity: object, session: str, timestamp: str, model: str | None
             "model": model or "unknown", "source": source, "usage": normalize_usage(usage)}
 
 
-def scan_codex(root: Path | None = None, pi_root: Path | None = None) -> dict:
+def scan_codex(root: Path | None = None, pi_root: Path | None = None, *, include_pi: bool = True) -> dict:
     root = root or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     events: dict[str, dict] = {}
     diagnostics = defaultdict(int)
@@ -94,6 +96,8 @@ def scan_codex(root: Path | None = None, pi_root: Path | None = None) -> dict:
                     break
                 # Large response/tool records need not be parsed or retained.
                 if not any(k in line[:250] for k in (b'"turn_context"', b'"session_meta"', b'"event_msg"', b'"token_usage_record"')):
+                    continue
+                if b'"event_msg"' in line[:250] and b'"token_count"' not in line:
                     continue
                 try:
                     row = json.loads(line)
@@ -140,13 +144,22 @@ def scan_codex(root: Path | None = None, pi_root: Path | None = None) -> dict:
                         previous = total
                         continue
                     usage = info.get("last_token_usage")
-                    if usage is not None and total and total != previous:
+                    # A fork can emit its first context BEFORE replaying the
+                    # parent's cumulative counter. Only its last request belongs
+                    # to this child; the inherited prefix is not a missing gap.
+                    inherited_baseline = forked and previous is None
+                    if inherited_baseline:
+                        diagnostics["inherited_baselines"] += 1
+                    if usage is not None and total and total != previous and not inherited_baseline:
                         delta = {key: total.get(key, 0) - (previous or {}).get(key, 0) for key in FIELDS}
                         if all(value >= 0 for value in delta.values()):
                             residual = {key: delta[key] - usage.get(key, 0) for key in FIELDS}
                             if all(value >= 0 for value in residual.values()) and (residual["input_tokens"] or residual["output_tokens"]):
                                 recovered = residual
                     if usage is None and total:
+                        if inherited_baseline:
+                            previous = total
+                            continue
                         if previous and total.get("input_tokens", 0) < previous.get("input_tokens", 0):
                             diagnostics["counter_resets"] += 1
                             usage = total
@@ -186,7 +199,7 @@ def scan_codex(root: Path | None = None, pi_root: Path | None = None) -> dict:
                 events[event["id"]] = event
     # Codex-authenticated requests made through Pi also use the same allowance.
     pi_root = pi_root if pi_root is not None else Path.home() / ".pi/agent/sessions"
-    for path in sorted(pi_root.rglob("*.jsonl")):
+    for path in sorted(pi_root.rglob("*.jsonl")) if include_pi else ():
         with path.open(encoding="utf-8") as stream:
             for line in stream:
                 try:
@@ -339,10 +352,10 @@ def summary(payload: dict) -> dict:
             "models": models, "diagnostics": payload.get("diagnostics", {})}
 
 
-def run_portable_usage():
+def run_portable_usage(*, automatic_sync: bool = True):
     from .runner import CostDiagnostics, StatsCommandResult
     from .sync import auto_receive
-    sync_note = auto_receive()
+    sync_note = auto_receive() if automatic_sync else None
     local = scan_codex()
     events = combined_usage(local)
     unknown = tuple(sorted({e["model"] for e in events if estimate_cost(e) is None}))
@@ -364,5 +377,11 @@ def run_portable_usage():
     remote = {key: {**value, 'days': [row for row in value['days'] if row['tool'] in ('Codex CLI', 'Codex via Pi')],
                        'hours': [row for row in value.get('hours', []) if row['tool'] in ('Codex CLI', 'Codex via Pi')]}
               for key, value in remote.items()}
-    dataset = add_devices(usage_dataset(events), remote, config['device'] if config else None)
+    from .history import add_usage, record_usage
+    local_dataset, history_note = record_usage(usage_dataset(local['events']), local['events'], scope='codex')
+    local_ids = {event['id'] for event in local['events']}
+    imported = [event for event in events if event['id'] not in local_ids]
+    dataset = add_devices(add_usage(local_dataset, usage_dataset(imported)), remote, config['device'] if config else None)
+    if history_note:
+        lines.append(history_note)
     return StatsCommandResult(dataset, CostDiagnostics(unknown, 0, sum(local["diagnostics"].get(name, 0) for name in ("malformed_lines", "invalid_usage", "invalid_pi_lines", "invalid_counter_gaps")) + bool(sync_note and ("unavailable" in sync_note or "attention" in sync_note)), tuple(lines)), 0)

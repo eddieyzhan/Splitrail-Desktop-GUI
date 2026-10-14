@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -25,6 +26,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class SafeCommandRunnerTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        patcher = patch('splitrail_desktop.history.data_dir', return_value=Path(directory.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_application_source_never_contains_reset_consuming_rpc(self) -> None:
         source_root = Path(__file__).parent.parent / "src" / "splitrail_desktop"
         application_source = "\n".join(
@@ -39,11 +47,12 @@ class SafeCommandRunnerTests(unittest.TestCase):
         from splitrail_desktop.domain import parse_stats_json
         run_mock.return_value = subprocess.CompletedProcess([], 0, "splitrail 3.9.1\n", "")
         dataset = parse_stats_json((FIXTURES / "stats_valid.json").read_text())
-        with patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, "WARNING: Unknown model: future-model. Defaulting to $0.\n")) as stream:
+        with patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, "WARNING: Unknown model: future-model. Defaulting to $0.\n")) as stream, \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value={'events': [], 'diagnostics': {}}):
             result = run_splitrail()
         self.assertEqual(run_mock.call_args.args[0], ("/safe/splitrail", "--version"))
         self.assertFalse(run_mock.call_args.kwargs['shell'])
-        stream.assert_called_once_with('/safe/splitrail', 45)
+        stream.assert_called_once_with('/safe/splitrail', 45, include_hours=True)
         self.assertEqual(result.cost_diagnostics.unknown_models, ("future-model",))
 
     @patch("splitrail_desktop.runner._find_executable", return_value="/safe/quota-axi")
@@ -68,6 +77,21 @@ class SafeCommandRunnerTests(unittest.TestCase):
         self.assertFalse(options["shell"])
         self.assertEqual(result.snapshot.status, "fresh")
         banked_mock.assert_called_once_with()
+
+    def test_native_codex_keeps_request_context_prices_with_custom_rates(self):
+        from test_combined import collector_fixture, event
+        from splitrail_desktop.portable import estimate_cost
+        request = event('large-request')
+        with patch('splitrail_desktop.runner._find_executable', return_value='/example/collector'), \
+             patch('splitrail_desktop.runner._check_splitrail_version'), \
+             patch('splitrail_desktop.activity.read_collector', return_value=(collector_fixture(), 0, '')), \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value={
+                 'events': [request], 'diagnostics': {'session_files': 1}}), \
+             patch('splitrail_desktop.pricing.load_overrides', return_value={
+                 'gpt-6-astra': {'input': 2, 'output': 4, 'cache_read': .1, 'cache_write': 3}}):
+            result = run_splitrail()
+            codex = next(row for row in result.dataset.days if row.analyzer == 'Codex CLI')
+            self.assertAlmostEqual(codex.cost, estimate_cost(request))
 
     @patch("splitrail_desktop.runner.subprocess.Popen")
     def test_codex_fallback_sends_only_allowlisted_read_methods(self, popen_mock) -> None:

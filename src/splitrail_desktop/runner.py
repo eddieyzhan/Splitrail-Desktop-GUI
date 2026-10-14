@@ -85,17 +85,24 @@ class QuotaCommandResult:
     diagnostic: str | None = None
 
 
-def run_splitrail(timeout_seconds: float = 45) -> StatsCommandResult:
+def run_splitrail(timeout_seconds: float = 45, *, include_hours: bool = True) -> StatsCommandResult:
     executable = _find_executable("SPLITRAIL_BIN", "splitrail", SPLITRAIL_FALLBACK)
     _check_splitrail_version(executable, min(timeout_seconds, 5))
     from .activity import read_collector
     try:
-        dataset, exit_code, stderr = read_collector(executable, timeout_seconds)
+        dataset, exit_code, stderr = read_collector(executable, timeout_seconds, include_hours=include_hours)
     except (StatsDataError, OSError, TimeoutError, subprocess.TimeoutExpired) as exc:
         raise LocalCommandError("Splitrail usage could not load: " + str(exc)) from exc
     diagnostics = analyze_splitrail_stderr(stderr)
-    from .pricing import reprice_dataset
+    from .pricing import reprice_dataset, resolve_rates
     dataset, resolved, unpriced = reprice_dataset(dataset)
+    # The native ledger already applies prices per request, including long
+    # context and custom rates. Do not reprice those request totals as daily sums.
+    from .codex_totals import reconcile_codex
+    dataset, codex_warning = reconcile_codex(dataset, preserve_history=True)
+    unpriced |= {detail.name for row in dataset.days for detail in row.model_details
+                 if detail.tokens.total and detail.cost == 0
+                 and resolve_rates(detail.name, row.day.isoformat()) is None}
     remaining = (set(diagnostics.unknown_models) - resolved) | unpriced
     lines = tuple(line for line in diagnostics.lines
                   if not any(re.search(r"Unknown model:\s*" + re.escape(name) + r"(?:\.\s|;|$)", line, re.I)
@@ -105,7 +112,8 @@ def run_splitrail(timeout_seconds: float = 45) -> StatsCommandResult:
     lines += tuple(f"Missing price: {name}. Add a rate in Settings → Model pricing."
                    for name in sorted(unpriced - set(diagnostics.unknown_models)))
     diagnostics = CostDiagnostics(tuple(sorted(remaining)), diagnostics.fallback_session_count,
-                                  diagnostics.other_warning_count, lines)
+                                  diagnostics.other_warning_count + bool(codex_warning),
+                                  lines + ((codex_warning,) if codex_warning else ()))
     if exit_code:
         extra = f"Splitrail exited with status {exit_code} after producing valid aggregate JSON."
         diagnostics = CostDiagnostics(

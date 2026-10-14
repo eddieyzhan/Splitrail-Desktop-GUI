@@ -48,7 +48,36 @@ Flickable {
                 }
                 ColumnLayout {
                     visible: s.connected; Layout.fillWidth: true; spacing: 14
-                    RowLayout { Layout.fillWidth: true; TextLabel { text: "Sync automatically"; font.pixelSize: 13; Layout.fillWidth: true } SoftSwitch { checked: s.automatic; enabled: !s.syncBusy; Accessible.name: "Automatic sync"; onToggled: bridge.updateSync(checked,s.receiveOnly,s.syncScope) } }
+                    RowLayout { Layout.fillWidth: true; TextLabel { text: "Auto sync"; font.pixelSize: 13; Layout.fillWidth: true } SoftSwitch { checked: s.automatic; enabled: !s.syncBusy; Accessible.name: "Automatic sync"; onToggled: bridge.updateSync(checked,s.receiveOnly,s.syncScope) } }
+                    RowLayout {
+                        visible: s.automatic; Layout.fillWidth: true; spacing: 12
+                        TextLabel { text: "Every"; font.pixelSize: 13 }
+                        SoftField {
+                            id: syncInterval; objectName: "syncIntervalHours"
+                            Layout.preferredWidth: 78; text: String(s.syncIntervalHours); enabled: !s.syncBusy
+                            rightPadding: 28; Accessible.name: "Sync interval in hours"
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator { bottom: 1; top: 168 }
+                            TextLabel { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "h"; color: AppStyle.muted }
+                        }
+                        TextLabel { text: "If unchanged"; font.pixelSize: 13; Layout.leftMargin: 8 }
+                        SoftField {
+                            id: syncIdle; objectName: "syncIdleHours"
+                            Layout.preferredWidth: 78; text: String(s.syncIdleHours); enabled: !s.syncBusy
+                            rightPadding: 28; Accessible.name: "Sync interval if unchanged, in hours"
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator { bottom: 1; top: 168 }
+                            TextLabel { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; text: "h"; color: AppStyle.muted }
+                        }
+                        Item { Layout.fillWidth: true }
+                        SoftButton {
+                            objectName: "saveSyncTiming"; text: "Save"; compact: true
+                            enabled: !s.syncBusy && syncInterval.acceptableInput && syncIdle.acceptableInput
+                                     && Number(syncIdle.text)>=Number(syncInterval.text)
+                                     && (Number(syncInterval.text)!==s.syncIntervalHours || Number(syncIdle.text)!==s.syncIdleHours)
+                            onClicked: bridge.updateSyncTiming(syncInterval.text,syncIdle.text)
+                        }
+                    }
                     RowLayout { Layout.fillWidth: true; TextLabel { text: s.syncStatus; color: AppStyle.muted; font.pixelSize: 11; Layout.fillWidth: true } SoftButton { text: page.advanced ? "Fewer options" : "Options"; iconName: "down"; tone: "ghost"; compact: true; onClicked: page.advanced=!page.advanced } }
                     ColumnLayout {
                         visible: page.advanced; Layout.fillWidth: true; spacing: 14

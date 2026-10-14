@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import re
 import shutil
@@ -21,6 +22,8 @@ CACHE_FILE = 'github-devices.json'
 STATE_FILE = 'github-sync-state-v2.json'
 MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
 MAX_DEVICES = 100
+DEFAULT_INTERVAL_HOURS = 1
+DEFAULT_IDLE_HOURS = 3
 REPOSITORY = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*')
 DEVICE_PATH = re.compile(r'usage/([a-f0-9]{32})\.json')
 _LOCK = threading.RLock()
@@ -52,7 +55,16 @@ def settings(directory: Path | None = None) -> dict | None:
             value.get('scope') not in ('all', 'codex') or type(value.get('automatic')) is not bool or
             type(value.get('receive_only')) is not bool):
         raise SyncError('Invalid sync settings. Disconnect and set up sync again.')
+    value.setdefault('interval_hours', DEFAULT_INTERVAL_HOURS)
+    value.setdefault('idle_hours', DEFAULT_IDLE_HOURS)
+    _validate_intervals(value['interval_hours'], value['idle_hours'])
     return value
+
+
+def _validate_intervals(interval_hours: int, idle_hours: int) -> None:
+    if (type(interval_hours) is not int or type(idle_hours) is not int or
+            not 1 <= interval_hours <= idle_hours <= 168):
+        raise SyncError('Use 1–168 hours; “If unchanged” must be at least “Every”.')
 
 
 def safe_settings(directory: Path | None = None) -> dict | None:
@@ -168,22 +180,29 @@ def create_private_repo(name: str) -> str:
 
 
 def configure(repository: str, directory: Path | None = None, *, scope: str = 'all',
-              automatic: bool = False, receive_only: bool = False) -> dict:
+              automatic: bool = False, receive_only: bool = False,
+              interval_hours: int | None = None, idle_hours: int | None = None) -> dict:
     if not REPOSITORY.fullmatch(repository) or scope not in ('all', 'codex'):
         raise SyncError('Use owner/repository and select a usage source.')
     directory = directory or data_dir()
     with _LOCK:
-        _private_repo(repository, writable=not receive_only)
         current = settings(directory)
+        if interval_hours is None:
+            interval_hours = current['interval_hours'] if current else DEFAULT_INTERVAL_HOURS
+        if idle_hours is None:
+            idle_hours = current['idle_hours'] if current else DEFAULT_IDLE_HOURS
+        _validate_intervals(interval_hours, idle_hours)
         if current and current['repository'].lower() != repository.lower():
             raise SyncError('Disconnect the current repository before connecting another.')
+        _private_repo(repository, writable=not receive_only)
         identity_file = directory / 'sync-device.json'
         identity = _read(identity_file).get('id')
         if not isinstance(identity, str) or not re.fullmatch(r'[a-f0-9]{32}', identity):
             identity = uuid.uuid4().hex
             write_export(identity_file, {'id': identity})
         config = {'version': 2, 'repository': repository, 'device': identity,
-                  'scope': scope, 'automatic': bool(automatic), 'receive_only': bool(receive_only)}
+                  'scope': scope, 'automatic': bool(automatic), 'receive_only': bool(receive_only),
+                  'interval_hours': interval_hours, 'idle_hours': idle_hours}
         write_export(directory / SETTINGS_FILE, config)
         return config
 
@@ -196,6 +215,19 @@ def disconnect(directory: Path | None = None) -> None:
             (directory / filename).unlink(missing_ok=True)
 
 
+def set_intervals(interval_hours: int, idle_hours: int, directory: Path | None = None) -> dict:
+    """Change local scheduling preferences, even while GitHub is offline."""
+    _validate_intervals(interval_hours, idle_hours)
+    directory = directory or data_dir()
+    with _LOCK:
+        config = settings(directory)
+        if not config:
+            raise SyncError('Connect GitHub in Settings to enable sync.')
+        config.update(interval_hours=interval_hours, idle_hours=idle_hours)
+        write_export(directory / SETTINGS_FILE, config)
+        return config
+
+
 def _collect(config: dict) -> dict:
     # Never upload imports, received devices, quota or account information.
     from .runner import LocalCommandError, MissingCommandError, run_splitrail
@@ -204,7 +236,9 @@ def _collect(config: dict) -> dict:
             dataset = run_splitrail().dataset
         else:
             from .portable import scan_codex, usage_dataset
-            dataset = usage_dataset(scan_codex()['events'])
+            from .history import record_usage
+            events = scan_codex()['events']
+            dataset, _ = record_usage(usage_dataset(events), events, scope='codex')
     except MissingCommandError as exc:
         raise SyncError(
             'All tools sync needs the Splitrail collector, which was not found. '
@@ -237,94 +271,143 @@ def cached_devices(directory: Path | None = None) -> dict[str, dict]:
     return cache.get('devices', {})
 
 
-def sync_now(directory: Path | None = None, *, snapshot: dict | None = None) -> dict:
+def _sync_delay(config: dict, state: dict) -> int:
+    stamp = state.get('checked_at') or state.get('synced_at')
+    if not stamp:
+        return 0
+    try:
+        checked = datetime.fromisoformat(stamp)
+        if checked.tzinfo is None:
+            return 0
+        elapsed = max(0, (datetime.now(timezone.utc) - checked).total_seconds())
+    except (ValueError, TypeError, OverflowError):
+        return 0
+    hours = config['idle_hours'] if state.get('unchanged') and not state.get('error') else config['interval_hours']
+    return max(0, math.ceil(hours * 3600 - elapsed))
+
+
+def seconds_until_auto_sync(directory: Path | None = None) -> int | None:
+    """Read the persisted schedule without contacting GitHub or scanning logs."""
+    directory = directory or data_dir()
+    config = settings(directory)
+    if not config or not config['automatic']:
+        return None
+    return _sync_delay(config, _read(directory / STATE_FILE))
+
+
+def sync_now(directory: Path | None = None, *, snapshot: dict | None = None,
+             automatic: bool = False) -> dict | None:
     directory = directory or data_dir()
     with _LOCK:
         config = settings(directory)
         if not config:
+            if automatic:
+                return None
             raise SyncError('Connect GitHub in Settings to enable sync.')
-        repository = config['repository']
-        repo = _private_repo(repository, writable=not config['receive_only'])
         state = _read(directory / STATE_FILE)
-        branch = repo.get('default_branch', 'main')
-        if not config['receive_only']:
-            local = snapshot if snapshot is not None else _collect(config)
-            # Reconstruct a whitelist payload, dropping all unknown fields.
-            data = decode_dataset(local, expected_device=config['device'])
-            clean = encode_dataset(data, config['device'], local['scope'])
-            raw = json.dumps(clean, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
-            if len(raw) > MAX_SNAPSHOT_BYTES:
-                raise SyncError('This device snapshot exceeds the 8 MB sync limit.')
-            fingerprint = digest(clean)
-            endpoint = f"repos/{repository}/contents/usage/{config['device']}.json"
-            meta = _api(endpoint, missing_ok=True, query='{sha,size}')
-            meta = json.loads(meta) if meta else {}
-            if state.get('fingerprint') != fingerprint or state.get('sent_sha') != meta.get('sha'):
-                body = {'message': 'Update device usage [skip ci]', 'branch': branch,
-                        'content': base64.b64encode(raw).decode('ascii'),
-                        'committer': {'name': 'Splitrail Sync', 'email': 'sync@users.noreply.github.com'},
-                        'author': {'name': 'Splitrail Sync', 'email': 'sync@users.noreply.github.com'}}
-                if meta.get('sha'):
-                    body['sha'] = meta['sha']
-                # Recheck immediately before writing, after a potentially slow local scan.
-                _private_repo(repository, writable=True)
-                result = json.loads(_api(endpoint, payload=body, method='PUT') or b'{}')
-                state.update(fingerprint=fingerprint, sent_sha=result.get('content', {}).get('sha'))
-                write_export(directory / STATE_FILE, state)
-        # Recheck privacy before reading; never follow arbitrary download URLs.
-        _private_repo(repository)
-        entries = _api(f'repos/{repository}/contents/usage', missing_ok=True)
-        entries = json.loads(entries) if entries else []
-        if not isinstance(entries, list) or len(entries) > MAX_DEVICES:
-            raise SyncError('The sync repository contains too many device files.')
-        previous = _read(directory / CACHE_FILE)
-        old_devices = previous.get('devices', {}) if previous.get('repository') == repository else {}
-        old_shas = previous.get('shas', {}) if previous.get('repository') == repository else {}
-        devices, shas = {}, {}
-        for entry in entries:
-            match = DEVICE_PATH.fullmatch(entry.get('path', ''))
-            if entry.get('type') != 'file' or not match:
-                continue
-            identity = match[1]
-            if identity == config['device']:
-                continue
-            if type(entry.get('size')) is not int or not 0 <= entry['size'] <= MAX_SNAPSHOT_BYTES:
-                raise SyncError('A remote device snapshot is too large.')
-            sha = entry.get('sha')
-            if not isinstance(sha, str) or not re.fullmatch(r'[a-f0-9]{40,64}', sha):
-                raise SyncError('Invalid remote snapshot reference.')
-            if sha and sha == old_shas.get(identity) and identity in old_devices:
-                payload = old_devices[identity]
-            else:
-                # Pin the content to the listed blob, so a concurrent write cannot mix versions.
-                raw = _api(f'repos/{repository}/git/blobs/{sha}', raw=True)
-                payload = json.loads(raw or b'{}')
-            data = decode_dataset(payload, expected_device=identity)
-            devices[identity] = encode_dataset(data, identity, payload['scope'])
-            shas[identity] = sha
-        # One atomic cache swap after every snapshot validates. A failure preserves old totals.
-        write_export(directory / CACHE_FILE, {'repository': repository, 'devices': devices, 'shas': shas})
-        state.update(synced_at=datetime.now(timezone.utc).isoformat(), device_count=len(devices) + 1)
-        state.pop('error', None)
+        if automatic and (not config['automatic'] or _sync_delay(config, state) > 0):
+            return None
+        # Persist attempts too: offline retries and restarts must respect the interval.
+        state.update(checked_at=datetime.now(timezone.utc).isoformat(), unchanged=False)
         write_export(directory / STATE_FILE, state)
-        return {'status': 'Up to date', 'devices': len(devices) + 1}
+        try:
+            return _sync(config, directory, state, snapshot)
+        except (SyncError, OSError, ValueError, KeyError, TypeError):
+            state.update(error=True, checked_at=datetime.now(timezone.utc).isoformat())
+            write_export(directory / STATE_FILE, state)
+            raise
 
 
-def auto_receive() -> str | None:
+def _sync(config: dict, directory: Path, state: dict, snapshot: dict | None) -> dict:
+    repository = config['repository']
+    repo = _private_repo(repository, writable=not config['receive_only'])
+    branch = repo.get('default_branch', 'main')
+    fingerprint = None
+    if not config['receive_only']:
+        local = snapshot if snapshot is not None else _collect(config)
+        # Reconstruct a whitelist payload, dropping all unknown fields.
+        data = decode_dataset(local, expected_device=config['device'])
+        clean = encode_dataset(data, config['device'], local['scope'])
+        raw = json.dumps(clean, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+        if len(raw) > MAX_SNAPSHOT_BYTES:
+            raise SyncError('This device snapshot exceeds the 8 MB sync limit.')
+        fingerprint = digest(clean)
+        endpoint = f"repos/{repository}/contents/usage/{config['device']}.json"
+        meta = _api(endpoint, missing_ok=True, query='{sha,size}')
+        meta = json.loads(meta) if meta else {}
+        if state.get('fingerprint') != fingerprint or state.get('sent_sha') != meta.get('sha'):
+            body = {'message': 'Update device usage [skip ci]', 'branch': branch,
+                    'content': base64.b64encode(raw).decode('ascii'),
+                    'committer': {'name': 'Splitrail Sync', 'email': 'sync@users.noreply.github.com'},
+                    'author': {'name': 'Splitrail Sync', 'email': 'sync@users.noreply.github.com'}}
+            if meta.get('sha'):
+                body['sha'] = meta['sha']
+            # Recheck immediately before writing, after a potentially slow local scan.
+            _private_repo(repository, writable=True)
+            result = json.loads(_api(endpoint, payload=body, method='PUT') or b'{}')
+            state.update(fingerprint=fingerprint, sent_sha=result.get('content', {}).get('sha'))
+            write_export(directory / STATE_FILE, state)
+    # Recheck privacy before reading; never follow arbitrary download URLs.
+    _private_repo(repository)
+    entries = _api(f'repos/{repository}/contents/usage', missing_ok=True)
+    entries = json.loads(entries) if entries else []
+    if not isinstance(entries, list) or len(entries) > MAX_DEVICES:
+        raise SyncError('The sync repository contains too many device files.')
+    previous = _read(directory / CACHE_FILE)
+    old_devices = previous.get('devices', {}) if previous.get('repository') == repository else {}
+    old_shas = previous.get('shas', {}) if previous.get('repository') == repository else {}
+    devices, shas = {}, {}
+    for entry in entries:
+        match = DEVICE_PATH.fullmatch(entry.get('path', ''))
+        if entry.get('type') != 'file' or not match:
+            continue
+        identity = match[1]
+        if identity == config['device']:
+            continue
+        if type(entry.get('size')) is not int or not 0 <= entry['size'] <= MAX_SNAPSHOT_BYTES:
+            raise SyncError('A remote device snapshot is too large.')
+        sha = entry.get('sha')
+        if not isinstance(sha, str) or not re.fullmatch(r'[a-f0-9]{40,64}', sha):
+            raise SyncError('Invalid remote snapshot reference.')
+        if sha and sha == old_shas.get(identity) and identity in old_devices:
+            payload = old_devices[identity]
+        else:
+            # Pin the content to the listed blob, so a concurrent write cannot mix versions.
+            _private_repo(repository)
+            raw = _api(f'repos/{repository}/git/blobs/{sha}', raw=True)
+            payload = json.loads(raw or b'{}')
+        data = decode_dataset(payload, expected_device=identity)
+        from .history import record_remote
+        devices[identity] = record_remote(encode_dataset(data, identity, payload['scope']), directory=directory)
+        shas[identity] = sha
+    # One atomic cache swap after every snapshot validates. A failure preserves old totals.
+    write_export(directory / CACHE_FILE, {'repository': repository, 'devices': devices, 'shas': shas})
+    # Compare completed totals, including remote changes and deleted devices.
+    usage_fingerprint = digest({'local': fingerprint, 'devices': devices})
+    changed = state.get('usage_fingerprint') != usage_fingerprint
+    state.update(synced_at=datetime.now(timezone.utc).isoformat(), device_count=len(devices) + 1,
+                 usage_fingerprint=usage_fingerprint, unchanged=not changed)
+    state['checked_at'] = state['synced_at']
+    state.pop('error', None)
+    write_export(directory / STATE_FILE, state)
+    return {'status': 'Up to date', 'devices': len(devices) + 1, 'changed': changed}
+
+
+def auto_receive(directory: Path | None = None) -> str | None:
     try:
-        config = settings()
+        config = settings(directory)
     except (SyncError, ValueError, OSError, TypeError):
         return 'Sync settings need attention. Open Settings; local usage is still available.'
     if config and config['automatic']:
         try:
-            result = sync_now()
-            return f"Synced · {result['devices']} devices"
+            result = sync_now(directory, automatic=True)
+            if result:
+                return f"Synced · {result['devices']} devices"
+            if not _read((directory or data_dir()) / STATE_FILE).get('error'):
+                return None
         except (SyncError, OSError, ValueError, KeyError, TypeError):
-            directory = data_dir()
-            state = _read(directory / STATE_FILE)
-            state['error'] = True
-            write_export(directory / STATE_FILE, state)
-            return 'Sync unavailable. Showing the last downloaded usage; try Sync again.'
+            pass
+        return 'Sync unavailable. Showing the last downloaded usage; try Sync again.'
     return None
 
 

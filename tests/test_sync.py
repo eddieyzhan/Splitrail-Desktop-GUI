@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -64,6 +65,9 @@ class GitHubSyncTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        history_dir = patch('splitrail_desktop.history.data_dir', return_value=self.root)
+        history_dir.start()
+        self.addCleanup(history_dir.stop)
         self.api = FakeGitHub()
         self.patch = patch('splitrail_desktop.sync._api', side_effect=self.api)
         self.patch.start()
@@ -71,6 +75,11 @@ class GitHubSyncTests(unittest.TestCase):
         prices = patch('splitrail_desktop.catalog_updates.refresh_prices', return_value=False)
         prices.start()
         self.addCleanup(prices.stop)
+        self.now = datetime(2026, 9, 30, 10, tzinfo=timezone.utc)
+        clock = patch('splitrail_desktop.sync.datetime', wraps=datetime)
+        self.clock = clock.start()
+        self.clock.now.side_effect = lambda tz: self.now
+        self.addCleanup(clock.stop)
 
     def device(self, name, **options):
         directory = self.root / name
@@ -79,6 +88,149 @@ class GitHubSyncTests(unittest.TestCase):
 
     def snapshot(self, config):
         return encode_dataset(collector_fixture(), config['device'], config['scope'])
+
+    def test_automatic_sync_waits_one_hour_then_three_if_unchanged(self):
+        directory, config = self.device('a', automatic=True)
+        snapshot = self.snapshot(config)
+        with patch('splitrail_desktop.sync._collect', return_value=snapshot) as collect:
+            self.assertTrue(sync.sync_now(directory, automatic=True)['changed'])
+            self.assertEqual(sync.seconds_until_auto_sync(directory), 3600)
+            calls = len(self.api.calls)
+            self.now += timedelta(seconds=3599)
+            self.assertIsNone(sync.sync_now(directory, automatic=True))
+            self.assertEqual(len(self.api.calls), calls)
+            collect.assert_called_once()
+            self.now += timedelta(seconds=1)
+            self.assertFalse(sync.sync_now(directory, automatic=True)['changed'])
+            self.assertEqual(sync.seconds_until_auto_sync(directory), 10800)
+            self.assertEqual(len(self.api.writes), 1)
+            # The delay is read from disk, so relaunches and usage refreshes cannot bypass it.
+            self.now += timedelta(seconds=10799)
+            calls = len(self.api.calls)
+            self.assertIsNone(sync.auto_receive(directory))
+            self.assertEqual(len(self.api.calls), calls)
+            self.now += timedelta(seconds=1)
+            snapshot['days'][0]['tokens']['input'] += 100
+            self.assertTrue(sync.sync_now(directory, automatic=True)['changed'])
+            self.assertEqual(sync.seconds_until_auto_sync(directory), 3600)
+            self.assertEqual(len(self.api.writes), 2)
+
+    def test_restored_history_and_only_new_requests_reach_other_devices(self):
+        from splitrail_desktop import history
+        from splitrail_desktop.runner import run_splitrail
+        from test_combined import event
+        old, new = event('old'), event('new', '2026-09-03')
+        baseline = collector_fixture()
+        history.initialize(baseline, baseline, [old], directory=self.root,
+                           now=datetime(2026, 9, 2, 12, tzinfo=timezone.utc))
+        sender, config = self.device('sender')
+        receiver, _ = self.device('receiver', receive_only=True)
+        with patch('splitrail_desktop.runner._find_executable', return_value='splitrail'), \
+             patch('splitrail_desktop.runner._check_splitrail_version'), \
+             patch('splitrail_desktop.activity.read_collector', return_value=(baseline, 0, '')), \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value={
+                 'events': [old, new], 'diagnostics': {'session_files': 2}}):
+            local = run_splitrail().dataset
+            sync.sync_now(sender)
+            sync.sync_now(sender)
+        sync.sync_now(receiver)
+        received = decode_dataset(sync.cached_devices(receiver)[config['device']])
+        self.assertEqual(received.days, local.days)
+        self.assertEqual(sum(row.tokens.total for row in local.days),
+                         sum(row.tokens.total for row in baseline.days) + 300_100)
+        self.assertEqual(len(self.api.writes), 1)
+
+    def test_download_only_remote_changes_and_deletions_resume_hourly_sync(self):
+        sender, config = self.device('sender')
+        receiver, _ = self.device('receiver', automatic=True, receive_only=True)
+        sync.sync_now(sender, snapshot=self.snapshot(config))
+        with patch('splitrail_desktop.sync._collect', side_effect=AssertionError('No local scan')):
+            self.assertTrue(sync.sync_now(receiver, automatic=True)['changed'])
+            self.now += timedelta(hours=1)
+            self.assertFalse(sync.sync_now(receiver, automatic=True)['changed'])
+            changed = self.snapshot(config)
+            changed['days'][0]['tokens']['input'] += 10
+            sync.sync_now(sender, snapshot=changed)
+            self.now += timedelta(hours=3)
+            self.assertTrue(sync.sync_now(receiver, automatic=True)['changed'])
+            self.assertEqual(sync.seconds_until_auto_sync(receiver), 3600)
+            self.now += timedelta(hours=1)
+            self.assertFalse(sync.sync_now(receiver, automatic=True)['changed'])
+            self.api.files.clear()
+            self.now += timedelta(hours=3)
+            self.assertTrue(sync.sync_now(receiver, automatic=True)['changed'])
+            self.assertEqual(sync.cached_devices(receiver), {})
+            self.assertEqual(sync.seconds_until_auto_sync(receiver), 3600)
+
+    def test_manual_sync_bypasses_wait_and_refresh_does_not_repeat_it(self):
+        directory, config = self.device('a', automatic=True)
+        snapshot = self.snapshot(config)
+        sync.sync_now(directory, snapshot=snapshot)
+        self.now += timedelta(minutes=1)
+        self.assertIsNotNone(sync.sync_now(directory, snapshot=snapshot))
+        self.assertEqual(sync.seconds_until_auto_sync(directory), 10800)
+        calls = len(self.api.calls)
+        self.assertIsNone(sync.auto_receive(directory))
+        self.assertEqual(len(self.api.calls), calls)
+
+    def test_offline_retries_wait_an_hour_and_manual_retry_can_recover(self):
+        directory, _ = self.device('a', automatic=True, receive_only=True)
+        sync.sync_now(directory)
+        sync.sync_now(directory)
+        self.now += timedelta(hours=3)
+        self.api.failure = sync.SyncError('Offline')
+        self.assertIn('last downloaded', sync.auto_receive(directory))
+        self.assertEqual(sync.seconds_until_auto_sync(directory), 3600)
+        calls = len(self.api.calls)
+        self.now += timedelta(seconds=3599)
+        self.assertIn('last downloaded', sync.auto_receive(directory))
+        self.assertEqual(len(self.api.calls), calls)
+        self.now += timedelta(seconds=1)
+        self.assertIn('last downloaded', sync.auto_receive(directory))
+        self.assertEqual(len(self.api.calls), calls + 1)
+        self.api.failure = None
+        sync.sync_now(directory)
+        self.assertNotIn('Offline', sync.status_text(directory))
+
+    def test_intervals_migrate_validate_and_persist_without_network(self):
+        directory, config = self.device('a', automatic=True, receive_only=True)
+        legacy = {k: v for k, v in config.items() if k not in ('interval_hours', 'idle_hours')}
+        (directory / sync.SETTINGS_FILE).write_text(json.dumps(legacy))
+        self.assertEqual(sync.settings(directory)['interval_hours'], 1)
+        self.assertEqual(sync.settings(directory)['idle_hours'], 3)
+        sync.sync_now(directory)
+        calls = len(self.api.calls)
+        sync.set_intervals(2, 6, directory)
+        self.assertEqual(len(self.api.calls), calls)
+        self.assertEqual(sync.seconds_until_auto_sync(directory), 7200)
+        sync.configure(config['repository'], directory, automatic=True, receive_only=True)
+        self.assertEqual(sync.settings(directory)['idle_hours'], 6)
+        self.now += timedelta(hours=2)
+        sync.sync_now(directory, automatic=True)
+        self.assertEqual(sync.seconds_until_auto_sync(directory), 21600)
+        for every, idle in ((0, 3), (1, 169), (4, 3), (True, 3), (1.5, 3), (1, '3')):
+            with self.subTest(every=every, idle=idle), self.assertRaises(sync.SyncError):
+                sync.set_intervals(every, idle, directory)
+        self.assertEqual(sync.settings(directory)['interval_hours'], 2)
+
+    def test_old_success_time_and_interrupted_attempt_prevent_early_sync(self):
+        directory, _ = self.device('a', automatic=True, receive_only=True)
+        for field in ('synced_at', 'checked_at'):
+            with self.subTest(field=field):
+                (directory / sync.STATE_FILE).write_text(json.dumps({field: self.now.isoformat()}))
+                self.assertEqual(sync.seconds_until_auto_sync(directory), 3600)
+                calls = len(self.api.calls)
+                self.assertIsNone(sync.sync_now(directory, automatic=True))
+                self.assertEqual(len(self.api.calls), calls)
+
+    def test_disabled_automatic_sync_never_scans_or_contacts_github(self):
+        directory, _ = self.device('a', automatic=False)
+        calls = len(self.api.calls)
+        with patch('splitrail_desktop.sync._collect') as collect:
+            self.assertIsNone(sync.seconds_until_auto_sync(directory))
+            self.assertIsNone(sync.sync_now(directory, automatic=True))
+            collect.assert_not_called()
+        self.assertEqual(len(self.api.calls), calls)
 
     def test_three_devices_roundtrip_costs_counts_and_repeated_sync(self):
         devices = [self.device(str(i)) for i in range(3)]
@@ -100,6 +252,24 @@ class GitHubSyncTests(unittest.TestCase):
             self.assertIn('[skip ci]', body['message'])
             self.assertEqual(body['author']['email'], 'sync@users.noreply.github.com')
         self.assertTrue(all('.github' not in endpoint for endpoint, _ in self.api.calls))
+
+    def test_all_tools_sync_uses_reconciled_modern_codex_history(self):
+        from splitrail_desktop.runner import run_splitrail
+        from test_combined import event
+        import subprocess
+        directory, config = self.device('modern')
+        native = {'events': [event('new-response')], 'diagnostics': {'session_files': 1}}
+        with patch('splitrail_desktop.runner._find_executable', return_value='/example/collector'), \
+             patch('splitrail_desktop.runner._run', return_value=subprocess.CompletedProcess([], 0, 'splitrail 3.9.1', '')), \
+             patch('splitrail_desktop.activity.read_collector', return_value=(collector_fixture(), 0, '')), \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value=native):
+            local = run_splitrail().dataset
+            sync.sync_now(directory)
+        sent = json.loads(base64.b64decode(self.api.writes[-1]['content']))
+        codex = [r for r in sent['days'] if r['tool'] == 'Codex CLI']
+        self.assertEqual(sum(r.tokens.total for r in decode_dataset(sent).days if r.analyzer == 'Codex CLI'), 300_100)
+        self.assertEqual(sum(r.tokens.total for r in local.days if r.analyzer == 'Codex CLI'), 300_100)
+        self.assertEqual(len(codex), 1)
 
     def test_source_costs_preserved_without_repricing_on_receiver(self):
         sender, cfg = self.device('a')
@@ -142,6 +312,7 @@ class GitHubSyncTests(unittest.TestCase):
         sync.sync_now(receiver)
         original = (receiver / sync.CACHE_FILE).read_bytes()
         self.api.failure = sync.SyncError('Offline')
+        self.now += timedelta(hours=1)
         with patch('splitrail_desktop.sync.data_dir', return_value=receiver):
             self.assertIn('last downloaded', sync.auto_receive())
         self.assertEqual(original, (receiver / sync.CACHE_FILE).read_bytes())
@@ -226,7 +397,8 @@ class GitHubSyncTests(unittest.TestCase):
         receiver, _ = self.device('receiver', receive_only=True)
         with patch('splitrail_desktop.runner._find_executable', return_value='splitrail'), \
              patch('splitrail_desktop.runner._check_splitrail_version'), \
-             patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, '')):
+             patch('splitrail_desktop.activity.read_collector', return_value=(dataset, 0, '')), \
+             patch('splitrail_desktop.codex_totals.scan_codex', return_value={'events': [], 'diagnostics': {}}):
             self.assertEqual(sync.sync_now(sender)['status'], 'Up to date')
         self.assertEqual(sync.sync_now(receiver)['devices'], 2)
         received = decode_dataset(sync.cached_devices(receiver)[config['device']])

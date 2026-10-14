@@ -1,7 +1,7 @@
 """Stream normalized collector statistics into content-free hourly aggregates.
 
 No request/session identifiers, titles, paths or conversation fields are retained.
-Daily collector totals remain authoritative; only timing detail is added here.
+Collector daily totals are preserved here; Codex is reconciled in codex_totals.
 """
 from __future__ import annotations
 
@@ -137,9 +137,10 @@ class _BoundedStream:
         return block
 
 
-def read_collector(executable: str, timeout: float):
+def read_collector(executable: str, timeout: float, *, include_hours: bool = True):
     """Drain both pipes, enforce a deadline, and never write records to disk."""
-    process = subprocess.Popen((executable, 'stats', '--include-messages'),
+    arguments = (executable, 'stats') + (('--include-messages',) if include_hours else ())
+    process = subprocess.Popen(arguments,
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, shell=False,
                                env={**external_command_env(), 'NO_COLOR': '1', 'TERM': 'dumb'},

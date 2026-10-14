@@ -6,6 +6,8 @@ Splitrail Desktop has no telemetry, analytics, crash reporting, hosted backend, 
 
 The dashboard reads local usage and optional quota tools. To show hourly charts, it streams normalized per-request statistics from the collector and keeps only timestamp/token/cost aggregates. Session names, project metadata, request identities and unexpected conversation content are discarded in memory; per-request collector records are never written to disk. Source logs remain untouched. Local exports and settings stay on your computer until you choose to share them.
 
+When historical usage is restored, a private local checkpoint stores allowlisted totals and hashed Codex request identities so repeat scans cannot recount requests or erase recorded history. It stores no prompts, replies, raw session IDs, source paths or credentials. The hashed request identities are never synced; GitHub receives the same aggregate allowlist described below. Back up the checkpoint with your app data if you want to preserve recovered totals.
+
 The optional Codex process monitor reads local OS process metadata, including PID, owner, executable, start time, working directory and status. It briefly inspects command arguments to classify the engine, but never retains or displays arguments. Process details and cutoff selections remain in memory and are never exported or synced. Only the chosen cutoff percentages are saved in local preferences. Arming a cutoff explicitly authorizes terminating protected local Codex engines; it starts off each time the app opens. Quota readings remain local and the app never consumes reset credits.
 
 ## Public price updates
@@ -20,7 +22,7 @@ Sync transfers a strict allowlist: daily token and activity counts, hourly token
 
 The app verifies repository privacy before each transfer. Owners control access. Making a repository public outside the app can expose previously committed usage; never change the visibility of a usage repository. The app cannot retroactively hide data published through GitHub itself.
 
-Disconnect removes the local received cache and disables sync. It does not sign out GitHub CLI or delete the remote repository or its history. Remove the private repository through GitHub to delete its stored history, subject to GitHub's retention policies.
+Disconnect removes the local received cache and disables sync. It does not remove restored historical checkpoints, sign out GitHub CLI or delete the remote repository or its history. Remove the private repository through GitHub to delete its stored history, subject to GitHub's retention policies.
 
 ## Public distribution
 

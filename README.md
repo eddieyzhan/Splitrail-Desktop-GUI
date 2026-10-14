@@ -6,7 +6,7 @@ The **Codex usage tracker works on its own**. Tracking other tools requires the 
 
 [Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
 
-**1.2.3** fixes collector discovery and All tools sync, adds GPT-6.1 Sol pricing and checks the shared price catalogue automatically. It includes the dedicated **Limits** page and reset protection.
+**1.2.4** releases collection memory after refreshes, loads hourly detail on demand, and refreshes totals every 5 minutes during activity or hourly while idle. Quota percentages still update every minute. It retains saved history, collector discovery fixes, automatic model pricing, and the dedicated **Limits** page with reset protection.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -50,6 +50,8 @@ The app defaults to **All devices** when it finds the collector, otherwise **Cod
 
 Select Today, Week, Month, Year or All time directly above the dashboard. The arrows (or Alt+Left/Right) cycle through these five presets and wrap at either end. Use the calendar button for a custom range. Today and other single-day ranges show tokens and costs by hour; longer ranges show daily or grouped trends. **Models**, **Tools** and **History** offer searchable tables. Detailed token totals are under **Models**; pricing and refresh issues are in the notification bell.
 
+Quota percentages update every minute. Token and cost totals refresh every 5 minutes during detected activity, backing off to hourly when unchanged. A lightweight check notices new Codex activity without rereading logs; Refresh updates totals immediately. Collection runs in temporary helpers to release working memory, and hourly chart detail loads when a single-day view needs it.
+
 ### Try it with sample data
 
 ```sh
@@ -91,7 +93,7 @@ Local tracking works without GitHub. To combine usage from your own computers:
 2. Choose **Get started** during setup, or **Settings → GitHub sync → Connect**. Continue with the detected account, or choose **Sign in with GitHub**. Open GitHub and enter the one-time code shown in the app.
 3. On the first device, choose **Create new** and name your private repository, such as `splitrail-usage`. On additional devices, choose **Use existing** and enter the same `owner/repository`.
 4. Choose whether to sync automatically, then select **Enable private sync**. This is the explicit step that creates/connects the private repository and enables sharing. Automatic sync is off by default.
-5. Open the dashboard. Choose **Settings → GitHub sync → Sync now** for a manual transfer. Under **Options**, select **All tools** (requires Splitrail) or **Codex** as this device's source.
+5. Open the dashboard. Choose **Settings → GitHub sync → Sync now** for a manual transfer. **Auto sync** checks every **1 hour**, or **3 hours** after an unchanged result. Change **Every** and **If unchanged** (hours), then **Save**. Under **Options**, select **All tools** (requires Splitrail) or **Codex** as this device's source.
 
 
 Only daily and hourly usage totals, estimated costs, dates and approved tool/model identifiers are synced. Prompts, responses, credentials, local paths and account/quota data are excluded. A private GitHub repository is access controlled, not end-to-end encrypted. See [Privacy](PRIVACY.md) and the [sync reference](docs/REFERENCE.md#what-github-sync-transfers).
@@ -112,6 +114,7 @@ Only daily and hourly usage totals, estimated costs, dates and approved tool/mod
 | A model has no cost estimate | Open **Notifications**, then add a rate under **Settings → Model pricing → Manage prices**. Tokens remain visible for unknown models. |
 | An estimate differs from your bill | Estimates depend on saved usage and configured prices. They cannot reconstruct subscription charges, all service tiers or every billing surcharge. [Pricing details](docs/REFERENCE.md#pricing). |
 | GitHub sync fails | Confirm GitHub CLI is signed in (`gh auth status`), check repository access and ensure the repository is private. The last successfully downloaded totals are retained after a failed sync. |
+| Codex totals differ between views | All local views and uploads use the same request ledger and any preserved history checkpoint. A checkpoint keeps historical figures unchanged; counting changes apply to new usage. Update other synced devices too. [History preservation](docs/REFERENCE.md#what-github-sync-transfers). |
 | Sync reports “Unable to sync” with local usage available | Update to 1.1.4 or newer. Inconsistent optional hourly reasoning counts could block the entire sync; the app now preserves daily and model totals, omits the invalid hourly detail, and explains chart coverage gaps. Local validation failures also report a specific error. |
 | Sync says the Splitrail collector was not found | **All tools** sync needs the separate collector even if the dashboard is showing Codex. Install Splitrail 3.9.1+, or select **Settings → GitHub sync → Options → Share from this device → Codex**. Version 1.1.3 reports this cause instead of the generic “Unable to sync” error. On Windows, the app also discovers tools in `%USERPROFILE%\.local\bin`, `%USERPROFILE%\.cargo\bin` and `%APPDATA%\npm`. |
 | Linux desktop launch cannot find installed tools | The app also checks `~/.local/bin`, `~/.cargo/bin`, `~/.npm-global/bin` and `/usr/local/bin`, even when the desktop session has an older `PATH`. Existing `PATH` entries keep priority. Custom install locations must be on the desktop's `PATH`; you can also set `SPLITRAIL_BIN` to the collector executable. |

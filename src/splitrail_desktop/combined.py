@@ -35,16 +35,17 @@ def add_imported_usage(dataset: UsageDataset, events: list[dict]) -> UsageDatase
     return UsageDataset(dataset.days + days, conversations, dataset.ignored_raw_messages, dataset.hours + hours)
 
 
-def run_combined_usage(directory: Path | None = None) -> StatsCommandResult:
+def run_combined_usage(directory: Path | None = None, *, automatic_sync: bool = True,
+                       include_hours: bool = True) -> StatsCommandResult:
     # Never silently substitute a Codex-only subtotal when the collector fails.
     try:
-        local_result = run_splitrail()
+        local_result = run_splitrail(include_hours=include_hours)
     except LocalCommandError as exc:
         raise LocalCommandError(
             f"All tools + imported usage requires the local Splitrail collector. {exc} "
             "For the narrower Codex-only view, choose Usage → Codex across devices (only)."
         ) from exc
-    sync_note = auto_receive()
+    sync_note = auto_receive(directory) if automatic_sync else None
     imported = combined_usage({"events": []}, directory or data_dir())
     # With no imports there is no overlap to check and no reason to rescan logs.
     local = scan_codex() if imported else {"events": [], "diagnostics": {}}
@@ -55,9 +56,9 @@ def run_combined_usage(directory: Path | None = None) -> StatsCommandResult:
     lines = (
         f"All local tools retained; added {len(events):,} distinct imported requests; "
         f"excluded {len(imported) - len(events):,} requests found in local Codex/Pi logs.",
-        "Local prices use Splitrail with catalogue fallbacks and custom rates. Imported requests use API-equivalent pricing.",
+        "Codex and imported requests use API-equivalent pricing. Other tools use collector prices with catalogue fallbacks and custom rates.",
         "Overlap uses available normalized local request IDs; the collector exposes no request identities. "
-        "Its existing local scan/dedup accounting is preserved.",
+        "Codex tokens use the request ledger; other tools retain collector totals.",
         "Imported conversations are active session-days; imported requests count as AI messages. "
         "User messages and tool calls are available for local tools only.",
     ) + tuple(f"Unpriced imported model: {name}; tokens retained." for name in unknown

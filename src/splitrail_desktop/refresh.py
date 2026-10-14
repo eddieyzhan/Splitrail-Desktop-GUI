@@ -2,15 +2,33 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from .domain import DailyUsage, ModelDetail, TokenUsage, UsageDataset
 
 
-NORMAL_REFRESH_SECONDS = 15 * 60
+NORMAL_REFRESH_SECONDS = 60 * 60
 FAST_REFRESH_SECONDS = 5 * 60
 QUOTA_REFRESH_SECONDS = 60
-QUOTA_RETRY_SECONDS = 5 * 60
+QUOTA_RETRY_SECONDS = 60
+ACTIVITY_CHECK_SECONDS = 60
+
+
+def codex_activity_stamp(root: Path | None = None, pi_root: Path | None = None) -> str:
+    """Notice log changes using metadata only; never open session contents."""
+    root = root or Path(os.environ.get('CODEX_HOME') or Path.home() / '.codex')
+    pi_root = pi_root if pi_root is not None else Path.home() / '.pi/agent/sessions'
+    digest = hashlib.sha256()
+    for directory in (root / 'sessions', root / 'archived_sessions', pi_root):
+        for path in sorted(directory.rglob('*.jsonl')):
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue  # A session may be archived during this metadata check.
+            digest.update(f'{path}\0{stat.st_size}\0{stat.st_mtime_ns}\n'.encode('utf-8', errors='surrogateescape'))
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -81,6 +99,10 @@ class AdaptiveRefreshPolicy:
         """Keep both the baseline and currently active cadence unchanged."""
 
         return RefreshDecision("failed", self.interval_seconds)
+
+    def record_activity(self) -> RefreshDecision:
+        self.interval_seconds = self.fast_interval_seconds
+        return RefreshDecision('activity', self.interval_seconds)
 
     # These aliases read naturally at call sites and keep the helper easy to
     # use in focused tests without exposing mutable implementation details.

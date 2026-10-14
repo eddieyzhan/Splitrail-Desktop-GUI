@@ -18,13 +18,163 @@ from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def test_activity_shortens_hourly_wait_without_postponing_five_minute_deadline(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        c.auto_refresh = True
+        c._accept_usage(demo.usage())
+        c._last_usage_tick = 1000
+        c._timer.start(3600 * 1000)
+        with patch('splitrail_desktop.desktop.time.monotonic', return_value=1060):
+            c._finished('activity', 'baseline', None, -1)
+            self.assertGreater(c._timer.remainingTime(), 3500 * 1000)
+            c._finished('activity', 'changed', None, -1)
+            self.assertAlmostEqual(c._timer.interval(), 240 * 1000, delta=1)
+        with patch('splitrail_desktop.desktop.time.monotonic', return_value=1120):
+            c._finished('activity', 'changed-again', None, -1)
+            self.assertAlmostEqual(c._timer.interval(), 180 * 1000, delta=1)
+
+    def test_activity_during_collection_keeps_fast_schedule_after_unchanged_result(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        c.auto_refresh = True
+        result = demo.usage()
+        c._accept_usage(result)
+        c._tasks['usage'] = c._usage_generation
+        c._note_activity()
+        c._finished('usage', result, None, c._usage_generation)
+        self.assertEqual(c._timer.interval(), 300 * 1000)
+        c._activity_during_refresh = False
+        c._finished('usage', result, None, c._usage_generation)
+        self.assertEqual(c._timer.interval(), 3600 * 1000)
+
+    def test_single_day_fetches_detail_once_then_reuses_it(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        c.auto_refresh = True
+        c._accept_usage(demo.usage())
+        with patch.object(c._worker, 'run', return_value=demo.usage()) as work:
+            c.choosePeriod('Day')
+            self.wait_for(lambda: not c.state['busy'] and not c.state['quotaBusy'])
+            self.assertEqual(work.call_args.args, ('usage',))
+            self.assertTrue(work.call_args.kwargs['include_hours'])
+            c.choosePeriod('Month')
+            c.choosePeriod('Day')
+            work.assert_called_once()
+
+    def test_day_selected_during_summary_refresh_requests_detail_after_it_finishes(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        c.auto_refresh = True
+        c._accept_usage(demo.usage())
+        c._tasks['usage'] = c._usage_generation
+        c._state['busy'] = True
+        with patch.object(c._worker, 'run', return_value=demo.usage()) as work:
+            c.choosePeriod('Day')
+            work.assert_not_called()
+            c._finished('usage', demo.usage(), None, c._usage_generation)
+            self.wait_for(lambda: not c.state['busy'] and not c.state['quotaBusy'])
+            self.assertTrue(work.call_args.kwargs['include_hours'])
+            work.assert_called_once()
+
+    def test_sync_timer_runs_in_local_view_and_respects_persisted_schedule(self):
+        from test_sync import FakeGitHub
+        c = self.controller
+        c.finishSetup()
+        c.auto_refresh = True
+        c._state['usageMode'] = 'local'
+        with patch('splitrail_desktop.sync._api', side_effect=FakeGitHub()), \
+             patch.object(c, 'refresh') as refresh:
+            sync.configure('example/private', automatic=True, receive_only=True)
+            c._load_settings()
+            self.assertTrue(c._sync_timer.isActive())
+            c._sync_timer.timeout.emit()
+            self.wait_for(lambda: not c.state['syncBusy'])
+            self.assertTrue(c._sync_timer.isActive())
+            self.assertEqual(c._sync_timer.interval(), 3600 * 1000)
+            refresh.assert_called_once()
+            c._sync_timer.timeout.emit()
+            self.wait_for(lambda: not c.state['syncBusy'])
+            refresh.assert_called_once()
+            c.beginSetup()
+            self.assertFalse(c._sync_timer.isActive())
+            c.finishSetup()
+            self.assertTrue(c._sync_timer.isActive())
+            c.close()
+            self.assertFalse(c._sync_timer.isActive())
+
+    def test_sync_timing_saves_offline_and_survives_other_setting_changes(self):
+        c = self.controller
+        with patch('splitrail_desktop.sync._private_repo', return_value={'private': True}), \
+             patch.object(c, 'refresh'):
+            sync.configure('example/private', automatic=True)
+            c._load_settings()
+            c.updateSyncTiming('2', '5')
+            self.wait_for(lambda: not c.state['syncBusy'])
+            self.assertEqual(c.state['syncIntervalHours'], 2)
+            self.assertEqual(c.state['syncIdleHours'], 5)
+            c.updateSync(False, True, 'codex')
+            self.wait_for(lambda: not c.state['syncBusy'])
+            self.assertFalse(c.state['automatic'])
+            self.assertEqual(sync.settings()['idle_hours'], 5)
+            for every, idle in (('', '3'), ('2', '1'), ('0', '3')):
+                c.updateSyncTiming(every, idle)
+                self.wait_for(lambda: not c.state['syncBusy'])
+                self.assertIn('1–168', c.state['settingsError'])
+                self.assertEqual(sync.settings()['interval_hours'], 2)
+
+    def test_auto_sync_defers_while_busy_and_does_not_run_in_demo_or_setup(self):
+        c = self.controller
+        c.auto_refresh = True
+        with patch.object(c, '_run') as worker:
+            c._auto_sync()
+            worker.assert_not_called()
+            c._state.update(onboarding=False, busy=True)
+            c._auto_sync()
+            self.assertTrue(c._sync_timer.isActive())
+            worker.assert_not_called()
+            c._state['busy'] = False
+            c.demo = True
+            c._auto_sync()
+            worker.assert_not_called()
+
+    def test_sync_failure_reschedules_and_keeps_usage_refresh_running(self):
+        from test_sync import FakeGitHub
+        c = self.controller
+        c.finishSetup()
+        c.auto_refresh = True
+        api = FakeGitHub()
+        with patch('splitrail_desktop.sync._api', side_effect=api), patch.object(c, 'refresh') as refresh:
+            sync.configure('example/private', automatic=True, receive_only=True)
+            c._load_settings()
+            api.failure = sync.SyncError('Offline')
+            c._auto_sync()
+            self.wait_for(lambda: not c.state['syncBusy'])
+            self.assertEqual(c._sync_timer.interval(), 3600 * 1000)
+            self.assertIn('Offline', c.state['syncStatus'])
+            self.assertIn('Offline', c.state['settingsError'])
+            refresh.assert_called_once()
+
+    def test_usage_timer_retries_when_sync_overlaps_its_deadline(self):
+        c = self.controller
+        c.auto_refresh = True
+        c._state.update(onboarding=False, syncBusy=True)
+        with patch.object(c, '_run') as worker:
+            c._timer.timeout.emit()
+            worker.assert_not_called()
+            self.assertTrue(c._timer.isActive())
+            self.assertEqual(c._timer.interval(), 1000)
+            c._state['syncBusy'] = False
+            c._timer.timeout.emit()
+            self.assertEqual(worker.call_args_list[0].args[0], 'usage')
+
     def test_price_update_preference_is_saved_and_controls_worker_downloads(self):
         c = self.controller
         c._state['onboarding'] = False
-        with patch('splitrail_desktop.desktop.run_splitrail', return_value=demo.usage()), \
+        with patch('splitrail_desktop.runner.run_splitrail', return_value=demo.usage()), \
              patch('splitrail_desktop.desktop.run_quota_axi', return_value=QuotaCommandResult(demo.quota(), 0)), \
              patch('splitrail_desktop.combined.run_combined_usage', return_value=demo.usage()), \
-             patch('splitrail_desktop.desktop.refresh_prices', return_value=False) as prices:
+             patch('splitrail_desktop.catalog_updates.refresh_prices', return_value=False) as prices:
             for enabled in (False, True):
                 c.setAutomaticPrices(enabled)
                 self.wait_for(lambda: not c.state['busy'] and not c.state['quotaBusy'])
@@ -371,13 +521,13 @@ class DesktopTests(QtCase):
         result = demo.usage()
         with patch('splitrail_desktop.combined.run_combined_usage', return_value=result) as combined, \
              patch('splitrail_desktop.portable.run_portable_usage', return_value=result) as codex, \
-             patch('splitrail_desktop.desktop.run_splitrail', return_value=result) as local:
+             patch('splitrail_desktop.runner.run_splitrail', return_value=result) as local:
             for mode, runner in [('combined', combined), ('local', local), ('codex', codex)]:
                 c._state['usageMode'] = mode
                 c.refresh()
                 c.refresh()
                 self.wait_for(lambda: not c.state['busy'] and not c.state['quotaBusy'])
-                runner.assert_called_once_with()
+                runner.assert_called_once_with(**({'include_hours': False} if mode == 'local' else {'automatic_sync': False} if mode == 'codex' else {'automatic_sync': False, 'include_hours': False}))
 
     def test_timer_stops_during_setup_and_close(self):
         c = self.controller
@@ -400,7 +550,7 @@ class DesktopTests(QtCase):
         c = self.controller
         c.finishSetup()
         with patch('splitrail_desktop.desktop.run_quota_axi', return_value=QuotaCommandResult(demo.quota(), 0)) as quota, \
-             patch('splitrail_desktop.desktop.run_splitrail') as usage:
+             patch('splitrail_desktop.runner.run_splitrail') as usage:
             c.refreshQuota()
             self.wait_for(lambda: not c.state['quotaBusy'])
             quota.assert_called_once_with()

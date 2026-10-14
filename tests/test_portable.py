@@ -71,6 +71,25 @@ class PortableUsageTests(unittest.TestCase):
         self.assertEqual(summary(data)["total_tokens"], 110)
         self.assertEqual(data["diagnostics"]["inherited_counters"], 1)
 
+    def test_fork_context_before_initial_counter_does_not_recover_parent_usage(self):
+        rows = [row("session_meta", {"id": "child", "forked_from_id": "parent"}),
+                self.context(), count(usage(), usage(300_000_100, 180_000_060, 110, 44)),
+                count(usage(), usage(300_000_200, 180_000_120, 120, 48), 2)]
+        data = self.scan(rows)
+        self.assertEqual(summary(data)['total_tokens'], 220)
+        self.assertEqual(data['diagnostics']['inherited_baselines'], 1)
+        self.assertNotIn('counter_gap_records', data['diagnostics'])
+
+    def test_fork_cumulative_only_baseline_is_not_a_request(self):
+        rows = [row("session_meta", {"id": "child", "parent_thread_id": "parent"}),
+                self.context(), count(None, usage(300_000_000, 180_000_000, 100, 40)),
+                count(None, usage(300_000_100, 180_000_060, 110, 44), 2)]
+        self.assertEqual(summary(self.scan(rows))['total_tokens'], 110)
+
+    def test_missing_nonfork_history_is_still_recovered(self):
+        data = self.scan([self.context(), count(usage(), usage(1000, 600, 100, 40))])
+        self.assertEqual(summary(data)['total_tokens'], 1100)
+
     def test_archived_and_active_copy_count_once(self):
         rows = [self.context(), count(usage())]
         self.scan(rows)
