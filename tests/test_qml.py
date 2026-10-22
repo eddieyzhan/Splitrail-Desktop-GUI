@@ -127,6 +127,102 @@ class QmlTests(QtCase):
         QTest.qWait(30)
         self.assertFalse(self.item('quotaPageBar').findChild(QObject, 'paceMarker').property('visible'))
 
+    def test_compact_quota_fits_small_windows_and_restores_dashboard(self):
+        dashboard = self.dashboard()
+        self.click('navigationLimits')
+        for theme in ('Pearl', 'Nord'):
+            self.controller.setTheme(theme)
+            for width, height in ((280, 110), (600, 110), (370, 270), (900, 230)):
+                self.window.resize(width, height)
+                QTest.qWait(30)
+                self.assertEqual((self.window.width(), self.window.height()), (width, height))
+                self.assertTrue(self.item('compactQuotaView').property('visible'))
+                self.assertFalse(self.item('fullDashboard').property('visible'))
+                self.assertFalse(self.controller._process_view_visible)
+                for name in ('compactQuotaUsage', 'compactQuotaBar', 'compactQuotaAge'):
+                    item = self.item(name)
+                    start = item.mapToScene(QPointF())
+                    end = item.mapToScene(QPointF(item.width(), item.height()))
+                    self.assertGreaterEqual(start.x(), 0, name)
+                    self.assertGreaterEqual(start.y(), 0, name)
+                    self.assertLessEqual(end.x(), width, name)
+                    self.assertLessEqual(end.y(), height, name)
+                self.assertFalse(self.item('compactQuotaUsage').property('truncated'))
+                self.assertFalse(self.item('compactQuotaAge').property('truncated'))
+            self.window.resize(960, 680)
+            QTest.qWait(30)
+            self.assertFalse(self.item('compactQuotaView').property('visible'))
+            self.assertTrue(self.item('fullDashboard').property('visible'))
+            self.assertEqual(dashboard.property('page'), 'Limits')
+            self.assertTrue(self.controller._process_view_visible)
+
+    def test_compact_quota_handles_missing_cached_and_live_data(self):
+        self.controller.finishSetup()
+        self.window.resize(280, 110)
+        QTest.qWait(30)
+        self.assertEqual(self.item('compactQuotaUsage').property('text'), 'Unavailable')
+        self.assertEqual(self.item('compactQuotaAge').property('text'), 'No weekly quota data')
+        self.assertFalse(self.item('compactQuotaBar').findChild(QObject, 'paceMarker').property('visible'))
+
+        snapshot = replace(demo.quota(), refreshed_at=datetime.now(timezone.utc)-timedelta(seconds=90))
+        for used, stale in ((38, True), (0, False), (100, False)):
+            weekly = replace(snapshot.base_weekly, percent_used=used, percent_remaining=100-used)
+            self.controller.quota_snapshot = replace(snapshot, windows=(weekly,), stale=stale)
+            self.controller.tick()
+            QTest.qWait(30)
+            self.assertEqual(self.item('compactQuotaUsage').property('text'), f'{used}% used')
+            self.assertEqual(self.item('compactQuotaBar').property('used'), used)
+            self.assertEqual(self.item('compactQuotaAge').property('text').startswith('Cached'), stale)
+            self.assertIn('Updated 1m ago', self.item('compactQuotaAge').property('text'))
+            self.assertFalse(self.item('compactQuotaAge').property('truncated'))
+
+        with patch.object(self.controller, '_start_quota_refresh') as refresh:
+            QTest.keyClick(self.window, Qt.Key_R, Qt.ControlModifier)
+            QTest.qWait(30)
+            refresh.assert_called_once()
+
+    def test_dashboard_sheds_sections_gradually_below_original_minimum(self):
+        self.dashboard()
+        stages = (
+            (960, 680, 182, True, True, True, True),
+            (959, 680, 56, True, True, True, True),
+            (960, 679, 56, True, True, True, True),
+            (820, 600, 56, False, True, True, True),
+            (780, 560, 56, False, False, True, True),
+            (700, 500, 0, False, False, False, True),
+            (580, 400, 0, False, False, False, False),
+            (460, 320, 0, False, False, False, False),
+            (360, 280, 0, False, False, False, False),
+            (280, 700, 0, False, False, False, False),
+            (280, 280, 0, False, False, False, False),
+            (960, 240, 0, False, False, False, False),
+        )
+        for theme in ('Pearl', 'Nord'):
+            self.controller.setTheme(theme)
+            for width, height, sidebar, header, dates, activity, models in stages:
+                with self.subTest(theme=theme, size=(width, height)):
+                    self.window.resize(width, height)
+                    QTest.qWait(30)
+                    self.assertFalse(self.item('compactQuotaView').property('visible'))
+                    self.assertTrue(self.item('fullDashboard').property('visible'))
+                    self.assertEqual(self.item('dashboardSidebar').property('visible'), sidebar > 0)
+                    if sidebar:
+                        self.assertEqual(self.item('dashboardSidebar').width(), sidebar)
+                    for name, visible in (('dashboardHeader', header), ('dashboardDates', dates),
+                                          ('activityChart', activity), ('overviewModelsCard', models)):
+                        self.assertEqual(self.item(name).property('visible'), visible, name)
+                    for name in ('overviewQuotaCard', 'overviewCostCard', 'overviewTokensCard'):
+                        item = self.item(name)
+                        self.assertTrue(item.property('visible'), name)
+                        start = item.mapToScene(QPointF())
+                        end = item.mapToScene(QPointF(item.width(), item.height()))
+                        self.assertGreaterEqual(start.x(), 0, name)
+                        self.assertGreaterEqual(start.y(), 0, name)
+                        self.assertLessEqual(end.x(), width, name)
+                        self.assertLessEqual(end.y(), height, name)
+                    for name in ('overviewCostValue', 'overviewTokensValue'):
+                        self.assertFalse(self.item(name).property('truncated'), name)
+
     def test_quota_guard_fields_arm_and_disarm_without_signalling_real_processes(self):
         dashboard = self.dashboard()
         now = datetime.now(timezone.utc)

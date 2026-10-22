@@ -24,6 +24,7 @@ Rectangle {
             } }
             Row {
                 id: bars; anchors.left: parent.left; anchors.leftMargin: 56; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.bottomMargin: 28
+                clip: true
                 spacing: 0
                 Repeater { model: card.points; delegate: Item {
                     required property var modelData; required property int index

@@ -52,6 +52,8 @@ Select Today, Week, Month, Year or All time directly above the dashboard. The ar
 
 Quota percentages update every minute. Token and cost totals refresh every 5 minutes during detected activity, backing off to hourly when unchanged. A lightweight check notices new Codex activity without rereading logs; Refresh updates totals immediately. Collection runs in temporary helpers to release working memory, and hourly chart detail loads when a single-day view needs it.
 
+Below the original 960 x 680 minimum, the window gradually simplifies: the sidebar becomes icons, headings and dates disappear, then activity and top models drop away. Quota and usage totals remain until the smallest sizes, down to 280 x 110 pixels, which show only weekly quota, its pace marker and when it last updated. Cached readings are labelled. Enlarge the window to restore the full dashboard and your previous page. Ctrl+R refreshes quota in the smallest view.
+
 ### Try it with sample data
 
 ```sh

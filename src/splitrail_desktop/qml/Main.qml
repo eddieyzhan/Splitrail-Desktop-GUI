@@ -7,8 +7,8 @@ ApplicationWindow {
     objectName: "splitrailWindow"
     visible: true
     width: 1280; height: 860
-    minimumWidth: bridge.state.onboarding ? 660 : 960
-    minimumHeight: 680
+    minimumWidth: bridge.state.onboarding ? 660 : 280
+    minimumHeight: bridge.state.onboarding ? 680 : 110
     title: bridge.state.demo ? "Splitrail · Demo" : "Splitrail"
     color: AppStyle.bg
     font.family: AppStyle.font

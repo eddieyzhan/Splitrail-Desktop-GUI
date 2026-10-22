@@ -10,7 +10,8 @@ Flickable {
     clip: true; contentWidth: width; contentHeight: Math.max(height, content.implicitHeight)
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: SoftScrollBar {}
-    Component.onCompleted: bridge.setProcessViewVisible(true)
+    Component.onCompleted: bridge.setProcessViewVisible(visible)
+    onVisibleChanged: bridge.setProcessViewVisible(visible)
     Component.onDestruction: bridge.setProcessViewVisible(false)
 
     function folderName(directory) {
