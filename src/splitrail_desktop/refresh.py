@@ -15,6 +15,7 @@ QUOTA_REFRESH_SECONDS = 60
 QUOTA_RETRY_SECONDS = 60
 HIDDEN_QUOTA_REFRESH_SECONDS = 5 * 60
 ACTIVITY_CHECK_SECONDS = 60
+DISPLAY_REFRESH_SECONDS = 15
 
 
 def codex_activity_stamp(root: Path | None = None, pi_root: Path | None = None) -> str:

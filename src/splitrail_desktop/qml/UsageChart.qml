@@ -9,17 +9,23 @@ Rectangle {
     property int metric: 0
     property real peak: Math.max(0, ...points.map(p=>metric===0 ? p.tokens : p.cost))
     property real maximum: peak>0 ? peak : 1
-    radius: 20; color: AppStyle.surface
+    radius: 12; color: AppStyle.surface
+    Accessible.role: Accessible.Chart
+    Accessible.name: "Usage activity" + (detail ? ", " + detail.toLowerCase() : "")
     ColumnLayout {
-        anchors.fill: parent; anchors.margins: 24; spacing: 20
-        RowLayout { Layout.fillWidth: true; TextLabel { text: card.detail ? "Activity · "+card.detail : "Activity"; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true } Segmented { options: ["Tokens", "Cost"]; selected: card.metric; onChosen: function(i){card.metric=i} } }
+        anchors.fill: parent; anchors.margins: 10; spacing: 6
+        RowLayout {
+            Layout.fillWidth: true; spacing: 4
+            Item {Layout.fillWidth:true}
+            Segmented {objectName:"chartMetric"; compact:true; options:["Tokens", "Cost"]; selected:card.metric; onChosen:function(i){card.metric=i}}
+        }
         Item {
-            id: plot; Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 150
+            id: plot; Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 54
             property int hovered: -1
             function number(v) {return card.metric===1 ? "$"+v.toFixed(v>0 && v<.01 ? 4 : v<10 ? 2 : 0) : v>=1e9 ? (v/1e9).toFixed(1)+"B" : v>=1e6 ? (v/1e6).toFixed(1)+"M" : v>=1000 ? (v/1000).toFixed(0)+"K" : v.toFixed(0)}
             Repeater { model: 4; delegate: Item {
                 required property int index; y: index*(plot.height-28)/3; width: plot.width; height: 1
-                TextLabel { text: plot.number(card.maximum*(1-index/3)); color: AppStyle.faint; font.pixelSize: 10; width: 44; y: -7 }
+                TextLabel { text: plot.number(card.maximum*(1-index/3)); color: AppStyle.faint; font.pixelSize: 9; width: 44; y: -6 }
                 Rectangle { x: 48; width: parent.width-48; height: 1; color: AppStyle.line; opacity: .8 }
             } }
             Row {

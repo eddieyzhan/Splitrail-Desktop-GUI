@@ -7,9 +7,10 @@ Flickable {
     objectName: "limitsPage"
     property var g: bridge.guardState
     property var q: bridge.clock.quota
-    clip: true; contentWidth: width; contentHeight: Math.max(height, content.implicitHeight)
+    clip: true; contentWidth: Math.max(width,520); contentHeight: Math.max(height, content.implicitHeight)
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: SoftScrollBar {}
+    ScrollBar.horizontal: SoftScrollBar {}
     Component.onCompleted: bridge.setProcessViewVisible(visible)
     onVisibleChanged: bridge.setProcessViewVisible(visible)
     Component.onDestruction: bridge.setProcessViewVisible(false)
@@ -21,13 +22,13 @@ Flickable {
 
     ColumnLayout {
         id: content
-        width: parent.width - 4; spacing: 20
+        width: page.contentWidth - 4; spacing: 12
         Rectangle {
-            Layout.fillWidth: true; implicitHeight: controls.implicitHeight + 40
-            radius: 20; color: AppStyle.surface
+            Layout.fillWidth: true; implicitHeight: controls.implicitHeight + 28
+            radius: 12; color: AppStyle.surface
             ColumnLayout {
                 id: controls
-                anchors.fill: parent; anchors.margins: 20; spacing: 18
+                anchors.fill: parent; anchors.margins: 14; spacing: 12
                 RowLayout {
                     Layout.fillWidth: true; spacing: 8
                     TextLabel {text: "Weekly cutoff"; font.pixelSize: 16; font.weight: Font.DemiBold}
@@ -44,7 +45,7 @@ Flickable {
                     }
                 }
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 24
+                    Layout.fillWidth: true; spacing: 16
                     ColumnLayout {
                         Layout.fillWidth: true; Layout.preferredWidth: 1; spacing: 6
                         RowLayout {
@@ -107,11 +108,11 @@ Flickable {
             }
         }
         Rectangle {
-            Layout.fillWidth: true; implicitHeight: processContent.implicitHeight + 40
-            radius: 20; color: AppStyle.surface
+            Layout.fillWidth: true; implicitHeight: processContent.implicitHeight + 28
+            radius: 12; color: AppStyle.surface
             ColumnLayout {
                 id: processContent
-                anchors.fill: parent; anchors.margins: 20; spacing: 12
+                anchors.fill: parent; anchors.margins: 14; spacing: 12
                 RowLayout {
                     Layout.fillWidth: true; spacing: 8
                     TextLabel {text: "Processes · " + g.processes.length; font.pixelSize: 15; font.weight: Font.DemiBold}

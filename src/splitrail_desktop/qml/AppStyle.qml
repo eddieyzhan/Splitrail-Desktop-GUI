@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 QtObject {
     property bool dark: false
-    property string font: "Inter"
+    property string font: Qt.application.font.family
     readonly property color bg: dark ? "#242932" : "#F5F6FA"
     readonly property color surface: dark ? "#303743" : "#FFFFFF"
     readonly property color sidebar: dark ? "#282E38" : "#ECEEF4"

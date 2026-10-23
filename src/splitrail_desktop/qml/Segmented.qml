@@ -5,8 +5,9 @@ Rectangle {
     id: segments
     property var options: []
     property int selected: 0
+    property bool compact: false
     signal chosen(int index)
-    implicitHeight: 36
+    implicitHeight: compact ? 28 : 32
     implicitWidth: row.implicitWidth + 6
     color: AppStyle.fill; radius: 11
     RowLayout {
@@ -17,7 +18,7 @@ Rectangle {
                 required property string modelData; required property int index
                 objectName: segments.objectName ? segments.objectName+"-"+index : ""
                 Accessible.name: modelData
-                Layout.fillWidth: true; Layout.fillHeight: true; implicitWidth: label.implicitWidth+24
+                Layout.fillWidth: true; Layout.fillHeight: true; implicitWidth: label.implicitWidth+(segments.compact ? 16 : 22)
                 onClicked: segments.chosen(index)
                 background: Rectangle { radius: 8; color: segments.selected===index ? AppStyle.surface : parent.hovered ? AppStyle.hover : "transparent"; border.width: parent.activeFocus ? 1 : 0; border.color: AppStyle.accent; Behavior on color { ColorAnimation { duration: 120 } } }
                 contentItem: TextLabel { id: label; text: modelData; font.pixelSize: 12; font.weight: segments.selected===index ? Font.DemiBold : Font.Normal; color: segments.selected===index ? AppStyle.ink : AppStyle.muted; horizontalAlignment: Text.AlignHCenter }

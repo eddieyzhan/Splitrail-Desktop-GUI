@@ -24,7 +24,7 @@ Button {
     contentItem: Item {
         Icon {
             anchors.centerIn: parent
-            width: 20; height: 20; name: "info"
+            width: 18; height: 18; name: "info"
             color: control.hovered || control.activeFocus ? AppStyle.accent : AppStyle.muted
         }
     }
@@ -35,7 +35,7 @@ Button {
         visible: control.hovered || control.activeFocus
         delay: control.activeFocus ? 0 : 300
         timeout: -1
-        width: 320; padding: 12; margins: 12
+        width: Math.min(320, Overlay.overlay ? Overlay.overlay.width - 24 : 320); padding: 12; margins: 12
         x: (control.width - width) / 2
         y: -height - 8
         text: control.explanation

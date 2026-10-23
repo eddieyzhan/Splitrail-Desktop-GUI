@@ -8,7 +8,7 @@ from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtTest import QTest
 import shiboken6
 
-from qt_support import QtCase
+from qt_support import QtCase, APP
 from splitrail_desktop import demo, sync
 from splitrail_desktop.pricing import load_overrides
 from splitrail_desktop.quota import BankedResetStatus, format_local_reset
@@ -25,7 +25,7 @@ class QmlTests(QtCase):
         self.engine = QQmlApplicationEngine()
         self.engine.warnings.connect(lambda messages: self.warnings.extend(m.toString() for m in messages))
         self.engine.rootContext().setContextProperty('bridge', self.controller)
-        self.engine.rootContext().setContextProperty('appFont', 'Sans Serif')
+        self.engine.rootContext().setContextProperty('appFont', APP.font().family())
         self.engine.load(QUrl.fromLocalFile(str(QML / 'Main.qml')))
         self.assertTrue(self.engine.rootObjects(), self.warnings)
         self.window = self.engine.rootObjects()[0]
@@ -186,7 +186,7 @@ class QmlTests(QtCase):
             self.controller.quota_snapshot = replace(snapshot, windows=(weekly,), stale=stale)
             self.controller.tick()
             QTest.qWait(30)
-            self.assertEqual(self.item('compactQuotaUsage').property('text'), f'{used}% used')
+            self.assertEqual(self.item('compactQuotaUsage').property('text'), f'{used}%')
             self.assertEqual(self.item('compactQuotaBar').property('used'), used)
             self.assertEqual(self.item('compactQuotaAge').property('text').startswith('Cached'), stale)
             self.assertIn('Updated 1m ago', self.item('compactQuotaAge').property('text'))
@@ -197,36 +197,36 @@ class QmlTests(QtCase):
             QTest.qWait(30)
             refresh.assert_called_once()
 
-    def test_dashboard_sheds_sections_gradually_below_original_minimum(self):
+    def test_dashboard_keeps_navigation_while_shedding_optional_sections(self):
         self.dashboard()
         stages = (
-            (960, 680, 182, True, True, True, True),
-            (959, 680, 56, True, True, True, True),
-            (960, 679, 56, True, True, True, True),
-            (820, 600, 56, False, True, True, True),
-            (780, 560, 56, False, False, True, True),
-            (700, 500, 0, False, False, False, True),
-            (580, 400, 0, False, False, False, False),
-            (460, 320, 0, False, False, False, False),
-            (360, 280, 0, False, False, False, False),
-            (280, 700, 0, False, False, False, False),
-            (280, 280, 0, False, False, False, False),
-            (960, 240, 0, False, False, False, False),
+            (1280, 860, True, True, True, True),
+            (960, 680, True, True, True, True),
+            (720, 440, True, True, True, True),
+            (640, 420, True, True, True, True),
+            (620, 420, True, True, False, True),
+            (580, 400, True, True, False, False),
+            (460, 320, True, True, False, False),
+            (360, 280, False, False, False, False),
+            (280, 700, False, False, False, False),
+            (280, 280, False, False, False, False),
+            (960, 240, False, False, False, False),
         )
         for theme in ('Pearl', 'Nord'):
             self.controller.setTheme(theme)
-            for width, height, sidebar, header, dates, activity, models in stages:
+            for width, height, header, dates, activity, models in stages:
                 with self.subTest(theme=theme, size=(width, height)):
                     self.window.resize(width, height)
                     QTest.qWait(30)
                     self.assertFalse(self.item('compactQuotaView').property('visible'))
                     self.assertTrue(self.item('fullDashboard').property('visible'))
-                    self.assertEqual(self.item('dashboardSidebar').property('visible'), sidebar > 0)
-                    if sidebar:
-                        self.assertEqual(self.item('dashboardSidebar').width(), sidebar)
+                    self.assertTrue(self.item('dashboardSidebar').property('visible'))
+                    self.assertEqual(self.item('dashboardSidebar').width(), 48)
                     for name, visible in (('dashboardHeader', header), ('dashboardDates', dates),
-                                          ('activityChart', activity), ('overviewModelsCard', models)):
+                                          ('activityChartLoader', activity), ('overviewModelsLoader', models)):
                         self.assertEqual(self.item(name).property('visible'), visible, name)
+                    self.assertEqual(self.item('activityChartLoader').property('item') is not None, activity)
+                    self.assertEqual(self.item('overviewModelsLoader').property('item') is not None, models)
                     for name in ('overviewQuotaCard', 'overviewCostCard', 'overviewTokensCard'):
                         item = self.item(name)
                         self.assertTrue(item.property('visible'), name)
@@ -410,7 +410,7 @@ class QmlTests(QtCase):
 
     def test_header_controls_align_at_both_sizes(self):
         self.dashboard()
-        for width, height in [(960, 700), (1280, 860)]:
+        for width, height in [(720, 440), (960, 700), (1280, 860)]:
             self.window.resize(width, height)
             QTest.qWait(30)
             refresh, bell = self.item('refreshButton'), self.item('notificationsButton')
@@ -482,10 +482,134 @@ class QmlTests(QtCase):
         self.assertEqual(self.controller.state['preset'], 'Day')
         self.click('periodTabs-2')
         self.assertEqual(self.controller.state['preset'], 'Month')
-        for width in (960, 1280):
-            self.window.resize(width, 700)
+        for width in (720, 960, 1280):
+            self.window.resize(width, 440)
             QTest.qWait(30)
             for name in ('previousPeriod', 'periodTabs-0', 'periodTabs-4', 'nextPeriod', 'dateSelector'):
                 item = self.item(name)
                 end = item.mapToScene(QPointF(item.width(), item.height()))
                 self.assertLessEqual(end.x(), width)
+
+    def test_default_dashboard_is_small_and_calendar_icon_is_centered(self):
+        self.dashboard()
+        self.assertEqual((self.window.width(), self.window.height()), (720, 440))
+        page = self.item('overviewPage')
+        self.assertEqual(page.property('contentHeight'), page.height())
+        for theme in ('Pearl', 'Nord'):
+            self.controller.setTheme(theme)
+            for width in (640, 720, 960, 1280):
+                self.window.resize(width, 440)
+                QTest.qWait(30)
+                button, icon = self.item('dateSelector'), self.item('dateSelectorIcon')
+                center = button.mapToScene(QPointF(button.width()/2, button.height()/2))
+                icon_center = icon.mapToScene(QPointF(icon.width()/2, icon.height()/2))
+                self.assertAlmostEqual(center.x(), icon_center.x(), delta=.5)
+                self.assertAlmostEqual(center.y(), icon_center.y(), delta=.5)
+
+    def test_metrics_keep_accessible_meaning_without_visible_labels_or_symbols(self):
+        self.dashboard()
+        for name, word in (('Cost', 'API'), ('Tokens', 'Tokens'), ('Conversations', 'messages')):
+            card = self.item('overview' + name + 'Card')
+            self.assertIn(name, self.expression(card, 'Accessible.name'))
+            self.assertIn(word, self.expression(card, 'Accessible.description'))
+            self.assertFalse(any(o.inherits('QQuickCanvasItem') for o in card.findChildren(QObject)))
+            pos = card.mapToScene(QPointF(card.width()/2, card.height()/2)).toPoint()
+            QTest.mouseMove(self.window, pos)
+            QTest.qWait(400)
+            tooltip = self.item(card.objectName() + 'Tooltip')
+            self.assertTrue(tooltip.property('visible'))
+            self.assertIn(word, tooltip.property('text'))
+            QTest.mouseMove(self.window, QPointF(2, 2).toPoint())
+            card.forceActiveFocus()
+            QTest.qWait(30)
+            self.assertTrue(tooltip.property('visible'))
+            QTest.keyClick(self.window, Qt.Key_Escape)
+            QTest.qWait(200)
+            self.assertFalse(tooltip.property('visible'))
+        self.assertTrue(self.item('overviewCostValue').property('text').startswith('$'))
+        forbidden = {'Overview', 'Estimated cost', 'USD  /  API equivalent', 'Conversations',
+                     'Top models', 'Activity', 'Hourly', 'Next reset', 'Weekly quota'}
+        for obj in self.item('overviewPage').findChildren(QObject):
+            if obj.property('visible'):
+                self.assertNotIn(obj.property('text'), forbidden)
+        # The remaining card icons are action buttons to open the detail pages.
+        for name in ('overviewQuotaCard', 'overviewModelsCard', 'activityChart'):
+            icons = [o for o in self.item(name).findChildren(QObject) if o.inherits('QQuickCanvasItem')]
+            self.assertTrue(all(o.property('name') == 'right' for o in icons))
+
+    def test_sidebar_has_accessible_icon_navigation_at_small_and_large_sizes(self):
+        self.dashboard()
+        for size in ((720, 440), (1280, 860), (580, 400)):
+            self.window.resize(*size)
+            QTest.qWait(30)
+            for title in ('Overview', 'Models', 'Tools', 'History', 'Quota', 'Limits'):
+                button = self.item('navigation' + title)
+                self.assertEqual(self.expression(button, 'Accessible.name'), title)
+                self.assertEqual(button.property('text'), '')
+                pos = button.mapToScene(QPointF(button.width()/2, button.height()/2)).toPoint()
+                QTest.mouseMove(self.window, pos)
+                QTest.qWait(400)
+                self.assertTrue(self.expression(button, 'ToolTip.visible'))
+                self.assertIn(title, self.expression(button, 'ToolTip.text'))
+        self.click('navigationModels')
+        self.assertEqual(self.item('dashboardView').property('page'), 'Models')
+        self.window.resize(460, 320)
+        QTest.qWait(30)
+        self.assertEqual(self.item('dashboardView').property('page'), 'Models')
+        self.assertIsNotNone(self.item('usageTable'))
+
+    def test_pages_and_popup_contents_are_created_only_on_demand(self):
+        dashboard = self.dashboard()
+        for name in ('settingsPage', 'limitsPage', 'usageTable', 'priceModel', 'applyDateRange'):
+            self.assertIsNone(self.window.findChild(QObject, name), name)
+        for name in ('datePicker', 'priceEditor', 'notifications'):
+            loader = self.item(name + 'ContentLoader')
+            self.assertIsNone(loader.property('item'))
+            popup = self.item('notificationsPopup' if name == 'notifications' else name)
+            QMetaObject.invokeMethod(popup, 'open')
+            QTest.qWait(50)
+            self.assertIsNotNone(loader.property('item'))
+            QMetaObject.invokeMethod(popup, 'close')
+            QTest.qWait(200)
+            self.assertIsNone(loader.property('item'))
+        for page, item in (('Settings', 'settingsPage'), ('Models', 'usageTable'), ('Limits', 'limitsPage')):
+            dashboard.setProperty('page', page)
+            QTest.qWait(50)
+            self.item(item)
+            self.window.resize(280, 110)
+            QTest.qWait(50)
+            self.assertIsNone(self.item('dashboardPageLoader').property('item'))
+            self.assertFalse(self.controller._process_view_visible)
+            self.window.resize(720, 440)
+            QTest.qWait(50)
+            self.item(item)
+        dashboard.setProperty('page', 'Overview')
+        QTest.qWait(50)
+        self.assertIsNone(self.window.findChild(QObject, 'limitsPage'))
+        self.assertFalse(self.controller._process_view_visible)
+
+    def test_quota_values_dates_and_stale_status_survive_compact_design(self):
+        self.dashboard()
+        expiry = datetime(2026, 10, 27, 4, 5, 6, tzinfo=timezone.utc)
+        banks = BankedResetStatus('fresh', count=2, expiries=(expiry, None),
+                                  expiry_details_complete=True, observed_at=datetime.now(timezone.utc))
+        self.controller.quota_snapshot = replace(self.controller.quota_snapshot, banked_resets=banks, stale=True)
+        self.controller.tick()
+        QTest.qWait(30)
+        self.assertEqual(self.item('overviewBankedResets').property('text'), '2')
+        self.assertIn('banked resets', self.expression(self.item('overviewBankedResets'), 'Accessible.name'))
+        self.assertIn('Next weekly reset', self.expression(self.item('overviewResetTime'), 'Accessible.name'))
+        self.assertIn('Cached', self.item('overviewQuotaAge').property('text'))
+        expiry_rows = [self.item('overviewBankExpiry-' + str(i)).property('text') for i in range(2)]
+        self.assertIn('Does not expire', expiry_rows)
+        self.assertTrue(any('27 Oct' in text for text in expiry_rows), expiry_rows)
+        self.assertLessEqual(self.item('activityChart').mapToScene(QPointF(0, self.item('activityChart').height())).y(), 440)
+        self.click('quotaDetailsButton')
+        self.assertEqual(self.item('bankedResetCount').property('text'), '2 available')
+
+    def test_chart_metric_switches_without_activity_heading(self):
+        self.dashboard()
+        self.click('chartMetric-1')
+        self.assertEqual(self.item('activityChart').property('metric'), 1)
+        self.click('chartMetric-0')
+        self.assertEqual(self.item('activityChart').property('metric'), 0)

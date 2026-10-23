@@ -7,10 +7,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 from splitrail_desktop.platform_support import (prepare_desktop_path, command_options,
-                                               path_executable, external_command_env)
+                                               path_executable, external_command_env, prepare_qt)
 
 
 class PlatformTests(unittest.TestCase):
+    def test_mac_renderer_default_preserves_explicit_graphics_choices(self):
+        with patch('splitrail_desktop.platform_support.sys.platform', 'darwin'), \
+             patch.dict(os.environ, {}, clear=True):
+            prepare_qt()
+            self.assertEqual(os.environ['QT_QUICK_BACKEND'], 'software')
+            os.environ['QT_QUICK_BACKEND'] = 'rhi'
+            prepare_qt()
+            self.assertEqual(os.environ['QT_QUICK_BACKEND'], 'rhi')
+            del os.environ['QT_QUICK_BACKEND']
+            os.environ['QSG_RHI_BACKEND'] = 'metal'
+            prepare_qt()
+            self.assertNotIn('QT_QUICK_BACKEND', os.environ)
+        with patch('splitrail_desktop.platform_support.sys.platform', 'linux'), \
+             patch.dict(os.environ, {}, clear=True):
+            prepare_qt()
+            self.assertNotIn('QT_QUICK_BACKEND', os.environ)
+
     def test_path_discovery_skips_frozen_gui_and_preserves_collector_priority(self):
         suffix = '.exe' if os.name == 'nt' else ''
         with tempfile.TemporaryDirectory() as directory:

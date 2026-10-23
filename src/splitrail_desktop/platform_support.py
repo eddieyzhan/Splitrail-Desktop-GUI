@@ -66,12 +66,17 @@ def prepare_desktop_path() -> None:
 
 
 def prepare_qt() -> None:
-    """Keep Qt's own DLL directory available while QML loads plugins on Windows.
+    """Use a lightweight macOS renderer and prepare Windows' DLL search path.
 
     Python's secure DLL lookup does not use PATH for these dependencies. Keep
     the directory handle alive for the process, including delayed QML imports.
     """
     global _qt_dll_directory
+    if sys.platform == 'darwin' and not os.environ.get('QSG_RHI_BACKEND'):
+        # This static 2D dashboard needs no Metal scene graph or texture atlas.
+        # Qt's raster backend updates only dirty regions on Retina displays.
+        # Keep an explicitly selected renderer available for troubleshooting.
+        os.environ.setdefault('QT_QUICK_BACKEND', 'software')
     if sys.platform == 'win32' and _qt_dll_directory is None:
         import PySide6
         _qt_dll_directory = os.add_dll_directory(str(Path(PySide6.__file__).resolve().parent))

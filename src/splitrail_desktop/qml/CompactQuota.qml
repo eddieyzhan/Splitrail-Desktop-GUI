@@ -18,17 +18,13 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
-            TextLabel {
-                text: "Weekly quota"
-                Layout.fillWidth: true
-                font.pixelSize: 13
-                color: AppStyle.muted
-            }
-            TextLabel {
+            HintLabel {
                 objectName: "compactQuotaUsage"
-                text: compact.q.available ? Math.round(compact.q.used) + "% used" : "Unavailable"
+                text: compact.q.available ? Math.round(compact.q.used) + "%" : "Unavailable"
                 font.pixelSize: 18
                 font.weight: Font.DemiBold
+                Accessible.name: "Weekly quota: " + text
+                explanation: "Codex weekly quota used. Enlarge the window for quota details and navigation."
             }
         }
         WeeklyQuotaBar {

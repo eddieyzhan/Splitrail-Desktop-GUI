@@ -18,6 +18,19 @@ from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def test_display_clock_only_ticks_each_second_for_live_quota_or_armed_guard(self):
+        c = self.controller
+        self.assertEqual(c._clock.interval(), 15000)
+        c.rememberPage('Quota')
+        self.assertEqual(c._clock.interval(), 1000)
+        c.rememberPage('Overview')
+        self.assertEqual(c._clock.interval(), 15000)
+        c.setWindowVisible(False)
+        c.rememberPage('Quota')
+        self.assertFalse(c._clock.isActive())
+        c.setWindowVisible(True)
+        self.assertEqual(c._clock.interval(), 1000)
+
     def test_hidden_window_suspends_ui_work_and_preserves_scheduled_sync(self):
         c = self.controller
         c._state['onboarding'] = False
@@ -53,6 +66,7 @@ class DesktopTests(QtCase):
             c.armQuotaGuard('95', '5', True)
             c.setWindowVisible(False)
             self.assertTrue(c._clock.isActive())
+            self.assertEqual(c._clock.interval(), 1000)
             self.assertTrue(c._process_timer.isActive())
             self.assertEqual(c._quota_timer.interval(), 60000)
             c._guard.last_snapshot = guard_snapshot(now=now-timedelta(seconds=121), reset=now+timedelta(days=3))

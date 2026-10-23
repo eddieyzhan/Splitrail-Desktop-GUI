@@ -4,9 +4,9 @@
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download for Mac](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/tag/v1.2.5) · [Other downloads](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
+[Download for Mac](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/tag/v1.2.6) · [Other downloads](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
 
-**1.2.5** adds a macOS menu-bar icon with no Dock icon. Close the window to keep private sync running quietly; reopen it or quit from the menu-bar icon. Hidden windows unload dashboard graphics, stop countdown updates and log-activity scans, and check quota every five minutes. An armed cutoff retains its one-minute quota checks and watchdog. This includes 1.2.4's compact layouts, disposable collection helpers, on-demand hourly detail, and preserved history.
+**1.2.6** reduces Mac graphics memory and fits the dashboard into a 720 × 440 window. Navigation uses icons; values, percentages and dates replace repetitive headings. Hover or keyboard focus reveals details. Inactive pages load on demand. The menu-bar app keeps private sync and any armed cutoff running when its window is closed.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -27,7 +27,7 @@ Built with Python and Qt Quick, with soft Pearl and Nord themes. No web server o
 
 ### 1. Download and open
 
-Choose your platform on the [latest release](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest). Native downloads include Python and dependencies.
+Choose your platform from the [releases](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases). Native downloads include Python and dependencies.
 
 | Platform | Download | Open |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Choose your platform on the [latest release](https://github.com/eddieyzhan/Split
 | macOS 14+, Apple silicon | `splitrail-desktop-macos-arm64.zip` | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
 | Linux, Intel/AMD 64-bit | `splitrail-desktop-linux-x86_64.tar.gz` | Extract, then run `./Splitrail/Splitrail`. Ubuntu 22.04+ or compatible. |
 
-Keep the extracted folder together. These community builds are unsigned and the Mac app is not notarized; the [install guide](docs/INSTALL.md) explains first-open prompts, checksums and Linux libraries. It also provides exact **Python installation commands for all three operating systems** using the small [source-only `.pyz`](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest/download/splitrail-desktop.pyz), including an Intel Mac option.
+Keep the extracted folder together. These community builds are unsigned and the Mac app is not notarized; the [install guide](docs/INSTALL.md) explains first-open prompts, checksums and Linux libraries. It also provides exact **Python installation commands for all three operating systems** using the small [source-only `.pyz`](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.2.6/splitrail-desktop.pyz), including an Intel Mac option.
 
 ### 2. Choose your usage view
 
@@ -52,9 +52,9 @@ Select Today, Week, Month, Year or All time directly above the dashboard. The ar
 
 While the window is visible, quota percentages update every minute. Token and cost totals refresh every 5 minutes during detected activity, backing off to hourly when unchanged. A lightweight check notices new Codex activity without rereading logs; Refresh updates totals immediately. Collection runs in temporary helpers to release working memory, and hourly chart detail loads when a single-day view needs it.
 
-On macOS, Splitrail lives in the menu bar instead of the Dock. Its menu offers **Open Splitrail**, **Refresh usage**, **Sync now**, and **Quit Splitrail**. Closing the window keeps the app running. Hidden or minimized windows pause automatic dashboard collection and log-activity scans, unload charts and graphics, and stop the one-second display clock. Quota checks slow to five minutes unless a cutoff is armed; automatic GitHub sync keeps its configured hourly schedule. Reopening refreshes outdated totals and quota. Choose **Quit Splitrail** to stop all monitoring and sync.
+On macOS, Splitrail lives in the menu bar instead of the Dock. Its menu offers **Open Splitrail**, **Refresh usage**, **Sync now**, and **Quit Splitrail**. Closing the window keeps the app running. Hidden or minimized windows pause automatic dashboard collection and log-activity scans, unload charts and graphics, and stop the display clock. Quota checks slow to five minutes unless a cutoff is armed; automatic GitHub sync keeps its configured hourly schedule. Reopening refreshes outdated totals and quota. Choose **Quit Splitrail** to stop all monitoring and sync.
 
-Below the original 960 x 680 minimum, the window gradually simplifies: the sidebar becomes icons, headings and dates disappear, then activity and top models drop away. Quota and usage totals remain until the smallest sizes, down to 280 x 110 pixels, which show only weekly quota, its pace marker and when it last updated. Cached readings are labelled. Enlarge the window to restore the full dashboard and your previous page. Ctrl+R refreshes quota in the smallest view.
+The default dashboard is 720 × 440 pixels, with an icon-only sidebar and compact values. Hover over navigation and values for names and details; screen readers retain descriptive labels. As the window shrinks, charts and model rows give way to usage and quota, down to a 280 × 110 quota view. Cached and unavailable readings remain explicit. Enlarge the window to restore the dashboard and previous page. Ctrl+R refreshes quota in the smallest view.
 
 ### Try it with sample data
 

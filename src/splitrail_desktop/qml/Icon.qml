@@ -7,6 +7,7 @@ Canvas {
     onNameChanged: requestPaint()
     onColorChanged: requestPaint()
     onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
     onPaint: {
         let c=getContext("2d"); c.reset(); c.scale(width/24,height/24)
         c.strokeStyle=icon.color; c.fillStyle=icon.color; c.lineWidth=1.65; c.lineCap="round"; c.lineJoin="round"

@@ -21,7 +21,8 @@ from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_o
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
 from .refresh import (AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS,
-                      ACTIVITY_CHECK_SECONDS, HIDDEN_QUOTA_REFRESH_SECONDS, codex_activity_stamp)
+                      ACTIVITY_CHECK_SECONDS, HIDDEN_QUOTA_REFRESH_SECONDS,
+                      DISPLAY_REFRESH_SECONDS, codex_activity_stamp)
 from .runner import run_quota_axi, SPLITRAIL_FALLBACK, _find_executable, MissingCommandError
 from .worker import BackgroundWorker
 from .catalog_updates import refresh_prices
@@ -113,7 +114,7 @@ class DesktopController(QObject):
         self._quota_timer.timeout.connect(self.refreshQuota)
         self._clock = QTimer(self)
         self._clock.timeout.connect(self.tick)
-        self._clock.start(1000)
+        self._clock.start(1000 if quota_page else DISPLAY_REFRESH_SECONDS * 1000)
         prefs = preferences.load()
         self._guard = QuotaGuard()
         self._guard_cancel = threading.Event()
@@ -233,13 +234,21 @@ class DesktopController(QObject):
     def rememberPage(self, page):
         if page in ('Overview', 'Models', 'Tools', 'History', 'Quota', 'Limits', 'Settings'):
             self._state['initialPage'] = page
+            self._schedule_clock()
+
+    def _schedule_clock(self):
+        if self.closed or not (self._window_visible or self._guard.armed):
+            self._clock.stop()
+            return
+        # Only an armed guard or the detailed live countdown needs one-second ticks.
+        seconds = 1 if self._guard.armed or self._state['initialPage'] == 'Quota' else DISPLAY_REFRESH_SECONDS
+        interval = seconds * 1000
+        if not self._clock.isActive() or self._clock.interval() != interval:
+            self._clock.start(interval)
 
     def _background_timers(self):
         # The cutoff watchdog must keep its original cadence even with no window.
-        if self._window_visible or self._guard.armed:
-            self._clock.start(1000)
-        else:
-            self._clock.stop()
+        self._schedule_clock()
         self._schedule_process_scan()
         if self.auto_refresh and not self.demo and not self._state['onboarding']:
             seconds = QUOTA_REFRESH_SECONDS if self._window_visible or self._guard.armed else HIDDEN_QUOTA_REFRESH_SECONDS

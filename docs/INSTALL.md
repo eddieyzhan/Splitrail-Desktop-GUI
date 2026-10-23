@@ -5,7 +5,7 @@ Get files only from the [official releases](https://github.com/eddieyzhan/Splitr
 | Computer | Download | Install and open |
 | --- | --- | --- |
 | Windows 10/11, 64-bit Intel/AMD | `splitrail-desktop-windows-x86_64.zip` | Right-click the ZIP → **Extract All**. Open `Splitrail`, then double-click `Splitrail.exe`. Keep the whole folder together. |
-| Mac with Apple silicon (M1 or newer), macOS 14+ | [splitrail-desktop-macos-arm64.zip (1.2.5)](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.2.5/splitrail-desktop-macos-arm64.zip) | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
+| Mac with Apple silicon (M1 or newer), macOS 14+ | [splitrail-desktop-macos-arm64.zip (1.2.6)](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.2.6/splitrail-desktop-macos-arm64.zip) | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
 | Linux, 64-bit Intel/AMD (Ubuntu 22.04+ or compatible) | `splitrail-desktop-linux-x86_64.tar.gz` | Extract the archive, then run `./Splitrail/Splitrail` from the extracted folder. Keep the whole folder together. |
 | Other supported Python/Qt platforms, including Intel Macs | `splitrail-desktop.pyz` | Use the Python instructions below. Intel macOS and Windows ARM are not native-tested release targets. |
 

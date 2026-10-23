@@ -10,11 +10,11 @@ ColumnLayout {
     readonly property int leading: (new Date(shown.getFullYear(),shown.getMonth(),1).getDay()+6)%7
     readonly property int dayCount: new Date(shown.getFullYear(),shown.getMonth()+1,0).getDate()
     function iso(day) {return shown.getFullYear()+"-"+String(shown.getMonth()+1).padStart(2,"0")+"-"+String(day).padStart(2,"0")}
-    spacing: 10
-    TextLabel { text: Qt.formatDate(month.shown,"MMMM yyyy"); font.pixelSize: 14; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter; Layout.bottomMargin: 6 }
+    spacing: 6
+    TextLabel { text: Qt.formatDate(month.shown,"MMMM yyyy"); font.pixelSize: 14; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter; Layout.bottomMargin: 2 }
     GridLayout {
-        Layout.fillWidth: true; columns: 7; rowSpacing: 4; columnSpacing: 2
-        Repeater { model: ["M","T","W","T","F","S","S"]; TextLabel { required property string modelData; text: modelData; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; color: AppStyle.faint; font.pixelSize: 11; Layout.preferredHeight: 24 } }
+        Layout.fillWidth: true; columns: 7; rowSpacing: 2; columnSpacing: 2
+        Repeater { model: ["M","T","W","T","F","S","S"]; TextLabel { required property string modelData; text: modelData; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; color: AppStyle.faint; font.pixelSize: 11; Layout.preferredHeight: 20 } }
         Repeater { model: 42; delegate: Button {
             required property int index
             property int day: index-month.leading+1
@@ -22,7 +22,7 @@ ColumnLayout {
             property string value: realDay ? month.iso(day) : ""
             property bool endpoint: realDay && (value===month.first || value===month.last)
             property bool inRange: realDay && month.first!=="" && month.last!=="" && value>month.first && value<month.last
-            Layout.fillWidth: true; Layout.preferredWidth: 35; Layout.preferredHeight: 35
+            Layout.fillWidth: true; Layout.preferredWidth: 28; Layout.preferredHeight: 28
             enabled: realDay
             Accessible.name: value
             onClicked: month.picked(value)

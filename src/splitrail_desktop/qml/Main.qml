@@ -6,7 +6,7 @@ ApplicationWindow {
     id: root
     objectName: "splitrailWindow"
     visible: true
-    width: 1280; height: 860
+    width: 720; height: bridge.state.onboarding ? 680 : 440
     minimumWidth: bridge.state.onboarding ? 660 : 280
     minimumHeight: bridge.state.onboarding ? 680 : 110
     title: bridge.state.demo ? "Splitrail · Demo" : "Splitrail"
