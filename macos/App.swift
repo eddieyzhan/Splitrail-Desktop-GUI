@@ -6,6 +6,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, Na
     var syncInfo: [String: Any] = [:]
     var preferences: [String: Any] = [:]
     var guardState = NativeGuard()
+    private(set) var recoveryTestReport: RecoveryTestReport?
     private var operationMessage = ""
     var message: String {
         get { ([operationMessage] + (cache.notices ?? [])).filter { !$0.isEmpty }.joined(separator: " ") }
@@ -138,6 +139,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, Na
             if let guardActivity { ProcessInfo.processInfo.endActivity(guardActivity); self.guardActivity = nil }
             scheduleQuota(); render()
         case "permission": requestStopPermission()
+        case "testRecovery":
+            // Pure simulation, created only on demand. No live adapter exists;
+            // no observer, worker or timer is installed for this preview.
+            recoveryTestReport = RecoverySimulation.run(); render()
         case "export", "import": transfer(name)
         case "prices": openPrices()
         default: run(name, options: options)
@@ -262,7 +267,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, Na
     private func render() { viewController?.refresh(); statusItem?.button?.toolTip = guardState.armed ? "Splitrail · cutoff \(guardState.blocked ? "triggered" : "armed")" : "Splitrail" }
     private func applyTheme() { window?.appearance = NSAppearance(named: preferences["theme"] as? String == "Nord" ? .darkAqua : .aqua) }
 
-    // Implemented with the verified turn-control adapter, never process termination.
+    // Conservative turn-control adapter; live behavior remains unverified.
     private func arm(_ options: [String: Any]) {
         guard !demo else { message = "Demo: no cutoff is activated."; render(); return }
         guardState.currentLimit = options["currentLimit"] as? Double ?? 95

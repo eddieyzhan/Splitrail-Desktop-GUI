@@ -36,7 +36,11 @@ def main():
     if not swift.exists() or not sdk.exists():
         raise SystemExit('Set DEVELOPER_DIR and SDKROOT to an existing Apple toolchain; this script never installs one.')
     for name, files, flags in (
-        ('ModelTests', ['macos/Model.swift', 'macos/tests/ModelTests.swift'], []),
+        ('ModelTests', ['macos/AutoRecovery.swift', 'macos/RecoverySimulation.swift',
+                        'macos/Model.swift', 'macos/tests/ModelTests.swift'], []),
+        ('AutoRecoveryTests', ['macos/AutoRecovery.swift', 'macos/RecoverySimulation.swift',
+                               'macos/tests/AutoRecoveryTests.swift'],
+         ['-swift-version', '6', '-warnings-as-errors']),
         ('TurnStopperTests', ['macos/TurnStopper.swift', 'macos/tests/TurnStopperTests.swift'],
          ['-swift-version', '6', '-warnings-as-errors', '-D', 'TURN_STOPPER_TESTS']),
     ):
@@ -87,7 +91,7 @@ def main():
         shutil.copytree(bundle, staging / bundle.name, symlinks=True)
         for name in ('LICENSE', 'PRIVACY.md'):
             shutil.copyfile(ROOT / name, staging / name)
-        for name in ('INSTALL.md', 'THIRD_PARTY.md', 'MACOS.md', 'TURN_INTERRUPTION.md'):
+        for name in ('INSTALL.md', 'THIRD_PARTY.md', 'MACOS.md', 'TURN_INTERRUPTION.md', 'AUTO_RECOVERY.md'):
             shutil.copyfile(ROOT / 'docs' / name, staging / name)
         shutil.copytree(ROOT / 'docs/licenses', staging / 'licenses')
         for package in ('ijson', 'psutil'):

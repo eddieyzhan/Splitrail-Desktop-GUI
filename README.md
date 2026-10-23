@@ -10,6 +10,8 @@ The **Codex usage tracker works on its own**. Tracking other tools requires the 
 
 ## Native Mac app
 
+**1.3.1 is an Auto-recover development preview.** Limits includes an on-demand synthetic test; live recovery remains unavailable because the Codex integration could not be inspected or tested. This is not a working automatic retry feature. See [implemented policy, tests and remaining integration work](docs/AUTO_RECOVERY.md). The stable Mac download above remains 1.3.0.
+
 Open the menu-bar icon for totals, weekly quota and reset dates. Right-click it for Refresh, Keep on screen, or Quit. Closing the window releases its views; the app stays out of the Dock. Daily usage updates are batched after log changes, with no countdown timer or hidden quota polling when the cutoff is off. Existing local data, custom pricing and private GitHub settings carry over.
 
 Settings contains the repository, automatic-sync cadence, receive-only mode, pricing and manual import/export. A signed-in GitHub CLI is required for sync; the app checks repository privacy before every transfer. Local Codex tracking needs no sign-in or collector. Routine quota uses the existing provider's lightweight HTTPS endpoint, with read-only Codex app-server fallback and periodic reset-date reads. `quota-axi` is only an older-CLI fallback.

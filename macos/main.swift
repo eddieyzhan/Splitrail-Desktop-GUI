@@ -6,6 +6,8 @@ if CommandLine.arguments.contains("--version") {
     exit(0)
 }
 if CommandLine.arguments.contains("--self-check") {
+    let recovery = RecoverySimulation.run()
+    guard recovery.success else { fputs(recovery.detail + "\n", stderr); exit(1) }
     let now = Date().timeIntervalSince1970
     let reading = QuotaReading(timestamp: now, status: "fresh", windows: [QuotaWindow(id: "week", label: "Weekly", kind: "weekly", percent: 40, reset: now + 86400)], expiries: [])
     var guardState = NativeGuard()
@@ -19,6 +21,12 @@ if CommandLine.arguments.contains("--self-check") {
     assert(!Bundle.main.paths(forResourcesOfType: "framework", inDirectory: "Frameworks").contains { $0.contains("Qt") })
     print("Splitrail \(nativeVersion): native AppKit, quota state and formatting checks passed")
     exit(0)
+}
+if CommandLine.arguments.contains("--test-recovery") {
+    let report = RecoverySimulation.run()
+    print(report.detail)
+    print(report.summary)
+    exit(report.success ? 0 : 1)
 }
 
 let demo = CommandLine.arguments.contains("--demo") || CommandLine.arguments.contains("--smoke-ui")

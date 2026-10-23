@@ -37,6 +37,9 @@ final class DashboardViewController: NSViewController, NSTextFieldDelegate {
     private let armButton = NSButton()
     private let disarmButton = NSButton()
     private let permissionButton = NSButton()
+    private let recoveryToggle = NSButton(checkboxWithTitle: DesktopRecoveryAvailability.title, target: nil, action: nil)
+    private let recoveryStatus = DashboardLabel(DesktopRecoveryAvailability.detail, size: 11, secondary: true, wraps: true)
+    private let recoveryTestButton = NSButton()
 
     private let repository = NSTextField()
     private let connectionStatus = DashboardLabel(size: 11, secondary: true)
@@ -167,22 +170,33 @@ final class DashboardViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private func buildLimits() {
-        limits.add(limitStatus, height: 23, after: 20)
+        limits.add(limitStatus, height: 23, after: 12)
         prepareField(currentLimit, label: "Current quota cap", numeric: true)
         prepareField(resetLimit, label: "Quota cap after reset", numeric: true)
         limits.add(fieldRow("Current cap", currentLimit, suffix: "%"), height: 28, after: 12)
         limits.add(fieldRow("After reset", resetLimit, suffix: "%"), height: 28, after: 18)
 
         let explanation = DashboardLabel("Stops the visible Codex turn; hidden chats and terminal sessions are not protected.", size: 12, secondary: true, wraps: true)
-        limits.add(explanation, after: 12)
+        limits.add(explanation, after: 8)
         let access = DashboardLabel("Arming requires Accessibility access and a verified, visible Stop control.", size: 11, secondary: true, wraps: true)
-        limits.add(access, after: 18)
+        limits.add(access, after: 12)
         prepareButton(armButton, title: "Arm", action: #selector(armPressed))
         prepareButton(disarmButton, title: "Disarm", action: #selector(disarmPressed))
-        limits.add(buttonRow([armButton, disarmButton]), height: 26, after: 16)
+        limits.add(buttonRow([armButton, disarmButton]), height: 26, after: 8)
         prepareButton(permissionButton, title: "Accessibility access…", action: #selector(permissionPressed))
         permissionButton.toolTip = "Allow Splitrail to press the Codex generation Stop control"
-        limits.add(buttonRow([permissionButton]), height: 26)
+        limits.add(buttonRow([permissionButton]), height: 26, after: 14)
+        limits.add(DashboardRule(), height: 1, after: 12)
+        recoveryToggle.font = .systemFont(ofSize: 12, weight: .regular)
+        recoveryToggle.controlSize = .small
+        recoveryToggle.isEnabled = false
+        recoveryToggle.state = .off
+        recoveryToggle.toolTip = "Recovery needs verified conversation identity, capacity errors, Retry, Fast, manual Stop and approval state. This build has no live adapter."
+        limits.add(recoveryToggle, height: 22, after: 6)
+        limits.add(recoveryStatus, after: 8)
+        prepareButton(recoveryTestButton, title: "Test logic", action: #selector(testRecoveryPressed))
+        recoveryTestButton.toolTip = "Run synthetic retry, Fast timeout, cutoff, Stop, draft and approval checks. Does not control Codex or consume allowance."
+        limits.add(buttonRow([recoveryTestButton]), height: 26)
         workingButtons.append(armButton)
     }
 
@@ -334,6 +348,8 @@ final class DashboardViewController: NSViewController, NSTextFieldDelegate {
             resetLimit.stringValue = number(state.resetLimit)
         }
         armButton.title = state.armed ? "Apply limits" : "Arm"
+        recoveryStatus.stringValue = actions.recoveryTestReport?.summary ?? DesktopRecoveryAvailability.detail
+        recoveryStatus.toolTip = actions.recoveryTestReport?.detail ?? recoveryToggle.toolTip
     }
 
     private func updateSettings(_ actions: NativeActions) {
@@ -376,13 +392,13 @@ final class DashboardViewController: NSViewController, NSTextFieldDelegate {
     }
 
     private func updatePreferredSize() {
-        let size = NSSize(width: 450, height: selectedPage == 2 ? 560 : selectedPage == 1 ? 400 : 370)
+        let size = NSSize(width: 450, height: selectedPage == 2 ? 560 : selectedPage == 1 ? 480 : 370)
         surface.preferredSize = size
         preferredContentSize = size
         // Preserve the parent's chosen width and the panel's top edge.
         if let window = view.window, window.contentViewController === self {
             let contentHeight = window.contentLayoutRect.height
-            let targetHeight: CGFloat = selectedPage == 2 ? 560 : selectedPage == 1 ? 400 : 370
+            let targetHeight: CGFloat = selectedPage == 2 ? 560 : selectedPage == 1 ? 480 : 370
             if abs(contentHeight - targetHeight) > 1 {
                 var frame = window.frame
                 let extra = targetHeight - contentHeight
@@ -596,6 +612,7 @@ final class DashboardViewController: NSViewController, NSTextFieldDelegate {
     @objc private func syncPressed() { send("sync") }
     @objc private func disarmPressed() { limitsDirty = false; send("disarm") }
     @objc private func permissionPressed() { send("permission") }
+    @objc private func testRecoveryPressed() { send("testRecovery") }
     @objc private func disconnectPressed() { settingsDirty = false; submittedSettings = nil; send("disconnect") }
     @objc private func pricesPressed() { send("prices") }
     @objc private func importPressed() { send("import") }

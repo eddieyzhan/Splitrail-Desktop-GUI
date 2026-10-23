@@ -5,6 +5,7 @@ protocol NativeActions: AnyObject {
     var syncInfo: [String: Any] { get }
     var preferences: [String: Any] { get }
     var guardState: NativeGuard { get }
+    var recoveryTestReport: RecoveryTestReport? { get }
     var message: String { get }
     var busy: Bool { get }
     var page: Int { get set }
@@ -13,7 +14,7 @@ protocol NativeActions: AnyObject {
     func action(_ name: String, options: [String: Any])
 }
 
-let nativeVersion = "1.3.0"
+let nativeVersion = "1.3.1"
 
 struct UsageModel: Codable {
     var name: String

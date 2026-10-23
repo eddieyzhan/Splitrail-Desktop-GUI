@@ -2,6 +2,8 @@
 
 Version 1.3.0 replaces the resident Python/Qt Mac application with Swift and AppKit. Existing accounting, pricing and private-sync code runs in short-lived headless workers, retaining tested cross-device compatibility. No worker is retained when its job finishes, and no Qt modules or libraries are included in this bundle.
 
+Version 1.3.1 is a development preview adding an unavailable Auto-recover switch and a synthetic **Test logic** action under Limits. Live recovery is not implemented. It installs no recovery observers, polling, timers or helpers; the test runs only when requested. Limits grows to 450 × 480 to fit the status and test control. The overview is unchanged. See [AUTO_RECOVERY.md](AUTO_RECOVERY.md) for implemented policy, required integration and the live testing block.
+
 The 450 × 370 dashboard shows plain totals, quota percentages, reset dates and model costs. Astra/Sol/Luna names group matching model-family costs; hover for the exact model IDs. There is one usage timestamp, regular-weight text, no reset count, no redundant arrows and no graph. The sidebar contains dashboard, Limits and Settings. Date selection, theme, custom prices, transfer and private sync remain available.
 
 ## Measurements

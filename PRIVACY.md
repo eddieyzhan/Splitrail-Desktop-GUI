@@ -1,5 +1,7 @@
 # Privacy
 
+The native Mac Auto-recover preview is a local, in-memory simulation. It does not inspect or control Codex, read chat/draft contents, alter permissions, store recovery settings or send recovery data. Its live switch is unavailable; see [AUTO_RECOVERY.md](docs/AUTO_RECOVERY.md).
+
 Splitrail Desktop has no telemetry, analytics, crash reporting, hosted backend, or embedded account credentials. Opening the app does not upload usage. The code repository and a user's private usage repository are separate.
 
 ## Local operation
