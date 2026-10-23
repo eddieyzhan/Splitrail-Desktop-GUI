@@ -8,7 +8,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -134,12 +133,18 @@ class BackgroundWorker:
                                            stderr=subprocess.DEVNULL, env=environment,
                                            start_new_session=os.name != 'nt', **command_options())
                 self._processes.add(process)
+            timed_out = threading.Event()
+            def expire():
+                timed_out.set()
+                _stop(process)
+            watchdog = threading.Timer(600 if task == 'sync' else 240, expire)
+            watchdog.daemon = True
+            watchdog.start()
             try:
-                deadline = time.monotonic() + (600 if task == 'sync' else 240)
-                while process.poll() is None:
-                    if time.monotonic() >= deadline:
-                        raise LocalCommandError('Background work timed out; previous totals are retained.')
-                    time.sleep(.05)
+                # Block in waitpid instead of waking Python 20 times each second.
+                process.wait()
+                if timed_out.is_set():
+                    raise LocalCommandError('Background work timed out; previous totals are retained.')
                 if process.returncode or not response.exists():
                     raise LocalCommandError('Background work stopped before returning a result.')
                 if response.stat().st_size > MAX_RESULT_BYTES:
@@ -152,6 +157,8 @@ class BackgroundWorker:
                     raise error(result['error'])
                 return decode_result(result['result'])
             finally:
+                watchdog.cancel()
+                watchdog.join()
                 _stop(process)
                 with self._lock:
                     self._processes.discard(process)

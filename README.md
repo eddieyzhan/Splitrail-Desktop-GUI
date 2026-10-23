@@ -4,9 +4,9 @@
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download the app](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/latest) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
+[Download for Mac](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/tag/v1.2.5) · [Other downloads](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
 
-**1.2.4** releases collection memory after refreshes, loads hourly detail on demand, and refreshes totals every 5 minutes during activity or hourly while idle. Quota percentages still update every minute. It retains saved history, collector discovery fixes, automatic model pricing, and the dedicated **Limits** page with reset protection.
+**1.2.5** adds a macOS menu-bar icon with no Dock icon. Close the window to keep private sync running quietly; reopen it or quit from the menu-bar icon. Hidden windows unload dashboard graphics, stop countdown updates and log-activity scans, and check quota every five minutes. An armed cutoff retains its one-minute quota checks and watchdog. This includes 1.2.4's compact layouts, disposable collection helpers, on-demand hourly detail, and preserved history.
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
@@ -50,7 +50,9 @@ The app defaults to **All devices** when it finds the collector, otherwise **Cod
 
 Select Today, Week, Month, Year or All time directly above the dashboard. The arrows (or Alt+Left/Right) cycle through these five presets and wrap at either end. Use the calendar button for a custom range. Today and other single-day ranges show tokens and costs by hour; longer ranges show daily or grouped trends. **Models**, **Tools** and **History** offer searchable tables. Detailed token totals are under **Models**; pricing and refresh issues are in the notification bell.
 
-Quota percentages update every minute. Token and cost totals refresh every 5 minutes during detected activity, backing off to hourly when unchanged. A lightweight check notices new Codex activity without rereading logs; Refresh updates totals immediately. Collection runs in temporary helpers to release working memory, and hourly chart detail loads when a single-day view needs it.
+While the window is visible, quota percentages update every minute. Token and cost totals refresh every 5 minutes during detected activity, backing off to hourly when unchanged. A lightweight check notices new Codex activity without rereading logs; Refresh updates totals immediately. Collection runs in temporary helpers to release working memory, and hourly chart detail loads when a single-day view needs it.
+
+On macOS, Splitrail lives in the menu bar instead of the Dock. Its menu offers **Open Splitrail**, **Refresh usage**, **Sync now**, and **Quit Splitrail**. Closing the window keeps the app running. Hidden or minimized windows pause automatic dashboard collection and log-activity scans, unload charts and graphics, and stop the one-second display clock. Quota checks slow to five minutes unless a cutoff is armed; automatic GitHub sync keeps its configured hourly schedule. Reopening refreshes outdated totals and quota. Choose **Quit Splitrail** to stop all monitoring and sync.
 
 Below the original 960 x 680 minimum, the window gradually simplifies: the sidebar becomes icons, headings and dates disappear, then activity and top models drop away. Quota and usage totals remain until the smallest sizes, down to 280 x 110 pixels, which show only weekly quota, its pace marker and when it last updated. Cached readings are labelled. Enlarge the window to restore the full dashboard and your previous page. Ctrl+R refreshes quota in the smallest view.
 
@@ -85,7 +87,7 @@ The cutoff starts **off** on each app launch. Percentages are remembered locally
 
 **This is a best-effort local cutoff, not a provider-enforced spending cap.** Quota checks run once per minute, and reporting delays or requests already in flight can exceed your chosen percentage. Leave headroom. If fresh quota is unavailable for two minutes, the guard stops protected processes. An app server can contain several conversations, all of which may be interrupted. The process list cannot reliably tell which chat is generating. Only the quota tool's account is measured; processes cannot automatically be matched to accounts. Cloud tasks, other computers, inaccessible processes and independent tool commands are outside the cutoff.
 
-Process scans run every ten seconds only while the Limits page is visible or the guard is armed. They inspect process metadata without reading session histories or continuously sampling CPU usage. Closing Splitrail disables protection. [Detection, stopping and platform details](docs/REFERENCE.md#codex-process-monitor-and-quota-cutoff).
+Process scans run every ten seconds only while the Limits page is visible or the guard is armed. They inspect process metadata without reading session histories or continuously sampling CPU usage. Quitting Splitrail disables protection; closing the macOS window leaves an armed cutoff running in the menu bar. [Detection, stopping and platform details](docs/REFERENCE.md#codex-process-monitor-and-quota-cutoff).
 
 ## Sync usage between computers (optional)
 

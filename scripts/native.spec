@@ -26,4 +26,5 @@ if sys.platform == 'darwin':
                  bundle_identifier='io.github.eddieyzhan.splitrail-desktop',
                  version=__version__,
                  info_plist={'NSHighResolutionCapable': True,
+                             'LSUIElement': True,
                              'LSMinimumSystemVersion': '14.0'})

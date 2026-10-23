@@ -75,6 +75,22 @@ class QmlTests(QtCase):
         QTest.qWait(30)
         return self.item('dashboardView')
 
+    def test_menu_bar_close_unloads_dashboard_and_reopen_restores_page(self):
+        dashboard = self.dashboard()
+        dashboard.setProperty('page', 'History')
+        self.controller._state['menuBarMode'] = True
+        self.controller._emit()
+        self.window.close()
+        QTest.qWait(30)
+        self.assertFalse(self.window.isVisible())
+        self.assertFalse(self.controller.closed)
+        self.assertFalse(self.controller._clock.isActive())
+        self.assertIsNone(self.window.findChild(QObject, 'dashboardView'))
+        self.window.show()
+        QTest.qWait(30)
+        self.assertEqual(self.item('dashboardView').property('page'), 'History')
+        self.assertTrue(self.controller._clock.isActive())
+
     def test_sync_intervals_save_and_reload_with_validated_hours(self):
         dashboard = self.dashboard()
         with patch('splitrail_desktop.sync._private_repo', return_value={'private': True}):

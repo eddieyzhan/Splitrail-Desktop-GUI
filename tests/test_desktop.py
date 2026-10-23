@@ -18,6 +18,52 @@ from splitrail_desktop.combined import add_imported_usage
 
 
 class DesktopTests(QtCase):
+    def test_hidden_window_suspends_ui_work_and_preserves_scheduled_sync(self):
+        c = self.controller
+        c._state['onboarding'] = False
+        c.auto_refresh = True
+        c._accept_usage(demo.usage())
+        c._timer.start(300000)
+        c._activity_timer.start()
+        c._sync_timer.start(3600000)
+        c.setWindowVisible(False)
+        self.assertFalse(c._clock.isActive())
+        self.assertFalse(c._timer.isActive())
+        self.assertFalse(c._activity_timer.isActive())
+        self.assertTrue(c._sync_timer.isActive())
+        self.assertEqual(c._quota_timer.interval(), 300000)
+        with patch.object(c, '_run') as work:
+            c._auto_refresh()
+            c._check_activity()
+            work.assert_not_called()
+        # A result arriving after hiding must not restart polling.
+        c._finished('usage', demo.usage(), None, c._usage_generation)
+        self.assertFalse(c._timer.isActive())
+        with patch.object(c, 'refresh') as refresh:
+            c._finished('auto-sync', {'changed': True}, None, -1)
+            refresh.assert_not_called()
+            c.setWindowVisible(True)
+            refresh.assert_called_once()
+
+    def test_hidden_armed_cutoff_keeps_watchdog_and_process_monitor(self):
+        c, now = self.prepare_guard()
+        c.auto_refresh = True
+        with patch.object(c, 'refreshProcesses'), \
+             patch('splitrail_desktop.desktop.stop_codex_processes', return_value=StopResult((123,456), ())) as stop:
+            c.armQuotaGuard('95', '5', True)
+            c.setWindowVisible(False)
+            self.assertTrue(c._clock.isActive())
+            self.assertTrue(c._process_timer.isActive())
+            self.assertEqual(c._quota_timer.interval(), 60000)
+            c._guard.last_snapshot = guard_snapshot(now=now-timedelta(seconds=121), reset=now+timedelta(days=3))
+            c.tick()
+            self.wait_for(lambda: 'guard-stop' not in c._tasks)
+            stop.assert_called_once()
+            c.disarmQuotaGuard()
+            self.assertFalse(c._clock.isActive())
+            self.assertFalse(c._process_timer.isActive())
+            self.assertEqual(c._quota_timer.interval(), 300000)
+
     def test_activity_shortens_hourly_wait_without_postponing_five_minute_deadline(self):
         c = self.controller
         c._state['onboarding'] = False

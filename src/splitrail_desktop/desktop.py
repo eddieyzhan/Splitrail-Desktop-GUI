@@ -21,7 +21,7 @@ from .pricing import CATALOG, RATE_FIELDS, load_overrides, resolve_rates, save_o
 from .quota import (format_refresh_age, format_countdown, format_local_reset,
                     preserve_banked_resets, is_banked_reset_status_stale, weekly_pace_percent)
 from .refresh import (AdaptiveRefreshPolicy, QUOTA_REFRESH_SECONDS, QUOTA_RETRY_SECONDS,
-                      ACTIVITY_CHECK_SECONDS, codex_activity_stamp)
+                      ACTIVITY_CHECK_SECONDS, HIDDEN_QUOTA_REFRESH_SECONDS, codex_activity_stamp)
 from .runner import run_quota_axi, SPLITRAIL_FALLBACK, _find_executable, MissingCommandError
 from .worker import BackgroundWorker
 from .catalog_updates import refresh_prices
@@ -68,6 +68,9 @@ class DesktopController(QObject):
         self.demo = demo
         self.closed = False
         self.auto_refresh = auto_refresh
+        self._window_visible = True
+        self._refresh_pending = False
+        self._last_quota_tick = None
         self.dataset = UsageDataset((), {})
         self.quota_snapshot = None
         self.usage_result = None
@@ -91,19 +94,22 @@ class DesktopController(QObject):
         self._policy = AdaptiveRefreshPolicy()
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.refresh)
+        self._timer.setTimerType(Qt.VeryCoarseTimer)
+        self._timer.timeout.connect(self._auto_refresh)
         self._activity_timer = QTimer(self)
         self._activity_timer.setInterval(ACTIVITY_CHECK_SECONDS * 1000)
+        self._activity_timer.setTimerType(Qt.VeryCoarseTimer)
         self._activity_timer.timeout.connect(self._check_activity)
         if auto_refresh and not demo:
             self._activity_timer.start()
             QTimer.singleShot(0, self._check_activity)
         self._sync_timer = QTimer(self)
         self._sync_timer.setSingleShot(True)
-        self._sync_timer.setTimerType(Qt.PreciseTimer)
+        self._sync_timer.setTimerType(Qt.VeryCoarseTimer)
         self._sync_timer.timeout.connect(self._auto_sync)
         self._quota_timer = QTimer(self)
         self._quota_timer.setSingleShot(True)
+        self._quota_timer.setTimerType(Qt.VeryCoarseTimer)
         self._quota_timer.timeout.connect(self.refreshQuota)
         self._clock = QTimer(self)
         self._clock.timeout.connect(self.tick)
@@ -145,6 +151,7 @@ class DesktopController(QObject):
             mode = 'combined' if collector else 'codex'
         self._state = {
             'appVersion': __version__,
+            'menuBarMode': False,
             'initialPage': 'Limits' if limits_page else 'Quota' if quota_page else 'Overview',
             'theme': prefs.get('theme', 'Pearl'), 'onboarding': bool(onboarding or (not prefs.get('onboarded') and not demo)),
             'setupStage': 'welcome', 'setupError': '', 'setupBusy': False, 'setupLogin': '', 'setupCode': '',
@@ -210,7 +217,7 @@ class DesktopController(QObject):
         return process.key not in self._excluded_processes
 
     def _schedule_process_scan(self):
-        if not self.demo and self.auto_refresh and (self._process_view_visible or self._guard.armed):
+        if not self.demo and self.auto_refresh and ((self._process_view_visible and self._window_visible) or self._guard.armed):
             self._process_timer.start()
         else:
             self._process_timer.stop()
@@ -219,8 +226,54 @@ class DesktopController(QObject):
     def setProcessViewVisible(self, visible):
         self._process_view_visible = visible
         self._schedule_process_scan()
-        if visible:
+        if visible and self._window_visible:
             self.refreshProcesses()
+
+    @Slot(str)
+    def rememberPage(self, page):
+        if page in ('Overview', 'Models', 'Tools', 'History', 'Quota', 'Limits', 'Settings'):
+            self._state['initialPage'] = page
+
+    def _background_timers(self):
+        # The cutoff watchdog must keep its original cadence even with no window.
+        if self._window_visible or self._guard.armed:
+            self._clock.start(1000)
+        else:
+            self._clock.stop()
+        self._schedule_process_scan()
+        if self.auto_refresh and not self.demo and not self._state['onboarding']:
+            seconds = QUOTA_REFRESH_SECONDS if self._window_visible or self._guard.armed else HIDDEN_QUOTA_REFRESH_SECONDS
+            # Hiding/showing must not postpone an already-due guard reading.
+            remaining = self._quota_timer.remainingTime()
+            if not ((self._window_visible or self._guard.armed) and 0 < remaining <= seconds * 1000):
+                self._quota_timer.start(seconds * 1000)
+
+    @Slot(bool)
+    def setWindowVisible(self, visible):
+        if self.closed or visible == self._window_visible:
+            return
+        self._window_visible = visible
+        self._background_timers()
+        if not visible:
+            self._timer.stop()
+            self._activity_timer.stop()
+            return
+        self.tick()
+        if self.auto_refresh and not self.demo and not self._state['onboarding']:
+            self._activity_timer.start()
+            age = time.monotonic() - self._last_usage_tick if self._last_usage_tick is not None else float('inf')
+            if self._refresh_pending or age >= self._policy.fast_interval_seconds:
+                self._refresh_pending = False
+                self.refresh()
+            else:
+                self._timer.start(max(1, int(self._policy.interval_seconds - age)) * 1000)
+                self._ensure_hourly_detail()
+            if self._last_quota_tick is None or time.monotonic() - self._last_quota_tick >= QUOTA_REFRESH_SECONDS:
+                self.refreshQuota()
+
+    def _auto_refresh(self):
+        if self._window_visible:
+            self.refresh()
 
     @Slot()
     def refreshProcesses(self):
@@ -275,6 +328,7 @@ class DesktopController(QObject):
                 except OSError:
                     self._guard_state['error'] = 'Cutoff is armed, but the limit preferences could not be saved.'
                 self._schedule_process_scan()
+                self._background_timers()
                 self._enforce_guard()
                 self.refreshProcesses()
             except ValueError as exc:
@@ -288,6 +342,7 @@ class DesktopController(QObject):
         self._guard.disarm()
         self._guard_state['error'] = ''
         self._schedule_process_scan()
+        self._background_timers()
         self._update_guard()
 
     def _enforce_guard(self):
@@ -346,7 +401,7 @@ class DesktopController(QObject):
         self._emit()
 
     def _check_activity(self):
-        if self.closed or self.demo or not self.auto_refresh or self._state['onboarding']:
+        if self.closed or self.demo or not self.auto_refresh or self._state['onboarding'] or not self._window_visible:
             return
         self._run('activity', codex_activity_stamp)
 
@@ -354,6 +409,9 @@ class DesktopController(QObject):
         if self.demo or not self.auto_refresh or self._state['onboarding']:
             return
         self._policy.record_activity()
+        if not self._window_visible:
+            self._refresh_pending = True
+            return
         if 'usage' in self._tasks:
             self._activity_during_refresh = True
             return
@@ -370,7 +428,7 @@ class DesktopController(QObject):
         return start == end
 
     def _ensure_hourly_detail(self):
-        if (self.auto_refresh and not self.demo and self._state['hasUsage'] and
+        if (self._window_visible and self.auto_refresh and not self.demo and self._state['hasUsage'] and
                 not self._hourly_detail_current and self._needs_hours() and 'usage' not in self._tasks):
             self.refresh()
 
@@ -393,7 +451,7 @@ class DesktopController(QObject):
         if self.closed or self.demo or self._state['onboarding']:
             return
         if self._state['syncBusy']:
-            if self.auto_refresh:
+            if self.auto_refresh and self._window_visible:
                 self._timer.start(1000)
             return
         if 'usage' not in self._tasks:
@@ -426,6 +484,7 @@ class DesktopController(QObject):
             self._emit()
 
     def _accept_usage(self, result):
+        self._refresh_pending = False
         self.usage_result = result
         self.dataset = result.dataset
         self._last_refresh = datetime.now(timezone.utc)
@@ -479,7 +538,7 @@ class DesktopController(QObject):
                 self._accept_usage(value)
             refresh_prices(allow_network=False)
             self.loadPrices()
-            if self.auto_refresh:
+            if self.auto_refresh and self._window_visible:
                 self._timer.start(self._policy.interval_seconds * 1000)
             if self._pricing_pending:
                 self._pricing_pending = False
@@ -491,6 +550,7 @@ class DesktopController(QObject):
             if error:
                 self._notice('quota', 'Quota is unavailable', str(error))
             else:
+                self._last_quota_tick = time.monotonic()
                 self._notifications.pop('quota', None)
                 if not value.snapshot.stale:
                     stamp = tuple((w.window_id, w.percent_used, w.resets_at) for w in value.snapshot.windows)
@@ -505,6 +565,8 @@ class DesktopController(QObject):
             self.tick()
             if self.auto_refresh:
                 interval = QUOTA_RETRY_SECONDS if error and not self._guard.armed else QUOTA_REFRESH_SECONDS
+                if not self._window_visible and not self._guard.armed:
+                    interval = HIDDEN_QUOTA_REFRESH_SECONDS
                 self._quota_timer.start(interval * 1000)
         elif kind == 'processes':
             self._guard_state['busy'] = False
@@ -557,7 +619,10 @@ class DesktopController(QObject):
                     self._state.update(connected=False, repository='', automatic=False, receiveOnly=False)
             self._load_settings()
             if kind != 'auto-sync' or value or error:
-                self.refresh()
+                if self._window_visible:
+                    self.refresh()
+                else:
+                    self._refresh_pending = True
         elif kind in ('export', 'import', 'remove-imports'):
             self._state['transferBusy'] = False
             if error:

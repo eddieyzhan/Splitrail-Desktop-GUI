@@ -8,7 +8,9 @@ Item {
     property var clock: bridge.clock
     property var q: clock.quota
     property string page: "Overview"
-    Component.onCompleted: page = s.initialPage
+    property bool pageReady: false
+    Component.onCompleted: { page = s.initialPage; pageReady = true }
+    onPageChanged: if (pageReady) bridge.rememberPage(page)
     property string query: ""
     readonly property bool settingsPage: page==="Settings"
     // Begin shedding chrome only below the original minimum window size.
