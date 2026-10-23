@@ -2,6 +2,8 @@
 
 [Back to the quick start](../README.md) · [Privacy](../PRIVACY.md)
 
+Native Mac 1.3.0 uses AppKit, incremental file notifications and generation Stop instead of the Qt process controls described below. See [MACOS.md](MACOS.md) for its interface, scheduling and cutoff limitations. Shared accounting, pricing and private-sync formats remain compatible.
+
 ## What GitHub sync transfers
 
 Each device gets a random identifier, independent of your hostname or account. It writes its own `usage/<random-id>.json` using the [GitHub Contents API](https://docs.github.com/en/rest/repos/contents). Only dates, hour buckets, known model/tool names, token counts, activity counts, and estimated USD costs are serialized. Unrecognized model/tool names are replaced with stable pseudonyms. No prompts, responses, paths, account/quota fields, credentials, diagnostic text, or raw session IDs are sent.

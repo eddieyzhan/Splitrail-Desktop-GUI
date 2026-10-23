@@ -73,148 +73,206 @@ def make_event(identity: object, session: str, timestamp: str, model: str | None
             "model": model or "unknown", "source": source, "usage": normalize_usage(usage)}
 
 
-def scan_codex(root: Path | None = None, pi_root: Path | None = None, *, include_pi: bool = True) -> dict:
-    root = root or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-    events: dict[str, dict] = {}
-    diagnostics = defaultdict(int)
-    files = sorted({p for name in ("sessions", "archived_sessions") for p in (root / name).rglob("*.jsonl")})
-    for path in files:
-        diagnostics["session_files"] += 1
-        model = None
-        session = path.stem[-36:]
-        previous = None
-        modern_started = False
-        forked = False
-        context_started = False
-        # Bound at the observed file size so an active session cannot extend the scan.
-        remaining = path.stat().st_size
-        with path.open("rb") as stream:
-            while remaining > 0:
-                line = stream.readline(remaining)
-                remaining -= len(line)
-                if not line:
-                    break
-                # Large response/tool records need not be parsed or retained.
-                if not any(k in line[:250] for k in (b'"turn_context"', b'"session_meta"', b'"event_msg"', b'"token_usage_record"')):
-                    continue
-                if b'"event_msg"' in line[:250] and b'"token_count"' not in line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except (ValueError, UnicodeError):
-                    diagnostics["malformed_lines"] += 1
-                    continue
-                payload = row.get("payload", {})
-                kind = row.get("type")
-                if kind in ("turn_context", "session_meta"):
-                    if kind == "session_meta":
-                        forked = bool(payload.get("forked_from_id") or payload.get("parent_thread_id") or
-                                      (payload.get("id") and payload["id"] != path.stem[-36:]))
-                    else:
-                        context_started = True
-                    model = payload.get("model") or model
-                    continue
-                identity = None
-                recovered = None
-                if kind == "token_usage_record":
-                    modern_started = True
-                    usage = payload.get("usage")
-                    if usage is None:
-                        diagnostics["invalid_usage"] += 1
+def _scan_state(path: Path, kind: str) -> dict:
+    return {"model": None, "session": digest(path.stem if kind == "pi" else path.stem[-36:]),
+            "previous": {}, "previous_key": digest(None), "previous_none": True,
+            "previous_truthy": False, "modern_started": False, "forked": False,
+            "context_started": False}
+
+
+def _bump(diagnostics, key):
+    diagnostics[key] = diagnostics.get(key, 0) + 1
+
+
+def _remember_total(state, total):
+    # Equality/identity use the complete object, but only numeric counter fields
+    # survive the line. Extra fields can contain arbitrary session content.
+    previous = {key: total.get(key, 0) for key in FIELDS} if total else {}
+    if any(type(n) not in (int, float, bool, type(None)) for n in previous.values()):
+        raise ValueError("Invalid cumulative counters")
+    state.update(previous=previous, previous_key=digest(total),
+                 previous_none=total is None, previous_truthy=bool(total))
+
+
+def _scan_event(identity, state, timestamp, usage, *, model=None, source="Codex CLI"):
+    event = make_event(identity, "unused", timestamp, model or state["model"], usage, source)
+    event["session"] = state["session"]
+    return event
+
+
+def _codex_record(raw, state, diagnostics, file_session):
+    if b'"event_msg"' in raw[:250] and b'"token_count"' not in raw:
+        return
+    try:
+        row = json.loads(raw)
+    except (ValueError, UnicodeError):
+        _bump(diagnostics, "malformed_lines")
+        return
+    payload = row.get("payload", {})
+    kind = row.get("type")
+    if kind in ("turn_context", "session_meta"):
+        if kind == "session_meta":
+            state["forked"] = bool(payload.get("forked_from_id") or payload.get("parent_thread_id") or
+                                   (payload.get("id") and digest(payload["id"]) != file_session))
+        else:
+            state["context_started"] = True
+        state["model"] = payload.get("model") or state["model"]
+        return
+    recovered = None
+    if kind == "token_usage_record":
+        state["modern_started"] = True
+        usage = payload.get("usage")
+        if usage is None:
+            _bump(diagnostics, "invalid_usage")
+            return
+        identity = ["response", payload["response_id"]] if payload.get("response_id") else ["record", row.get("timestamp"), usage]
+        if payload.get("thread_id"):
+            state["session"] = digest(payload["thread_id"])
+        _bump(diagnostics, "modern_records")
+    elif kind == "event_msg" and payload.get("type") == "token_count":
+        info = payload.get("info")
+        if not info:
+            return
+        total = info.get("total_token_usage")
+        if state["forked"] and not state["context_started"]:
+            _remember_total(state, total)
+            _bump(diagnostics, "inherited_counters")
+            return
+        if total is not None and digest(total) == state["previous_key"]:
+            _bump(diagnostics, "repeated_counters")
+            return
+        if state["modern_started"]:
+            _remember_total(state, total)
+            return
+        usage = info.get("last_token_usage")
+        inherited_baseline = state["forked"] and state["previous_none"]
+        if inherited_baseline:
+            _bump(diagnostics, "inherited_baselines")
+        previous = state["previous"]
+        if usage is not None and total and not inherited_baseline:
+            delta = {key: total.get(key, 0) - previous.get(key, 0) for key in FIELDS}
+            if all(value >= 0 for value in delta.values()):
+                residual = {key: delta[key] - usage.get(key, 0) for key in FIELDS}
+                if all(value >= 0 for value in residual.values()) and (residual["input_tokens"] or residual["output_tokens"]):
+                    recovered = residual
+        if usage is None and total:
+            if inherited_baseline:
+                _remember_total(state, total)
+                return
+            if state["previous_truthy"] and total.get("input_tokens", 0) < previous.get("input_tokens", 0):
+                _bump(diagnostics, "counter_resets")
+                usage = total
+            else:
+                usage = {key: max(0, total.get(key, 0) - previous.get(key, 0)) for key in FIELDS}
+        _remember_total(state, total)
+        if usage is None:
+            return
+        state["model"] = info.get("model") or state["model"]
+        identity = ["legacy", row.get("timestamp"), usage, total]
+        _bump(diagnostics, "legacy_records")
+    else:
+        return
+    try:
+        event = _scan_event(identity, state, row["timestamp"], usage)
+    except (KeyError, TypeError, ValueError):
+        _bump(diagnostics, "invalid_usage")
+        return
+    if recovered:
+        try:
+            gap = _scan_event(["counter-gap", identity], state, row["timestamp"], recovered)
+            if recovered["input_tokens"] > 272_000:
+                gap["model"] = "unknown-counter-gap"
+            yield "gap", gap
+            _bump(diagnostics, "counter_gap_records")
+        except ValueError:
+            _bump(diagnostics, "invalid_counter_gaps")
+    if event["usage"]["input_tokens"] or event["usage"]["output_tokens"]:
+        yield "codex", event
+
+
+def _codex_line(raw, state, diagnostics, file_session):
+    try:
+        yield from _codex_record(raw, state, diagnostics, file_session)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        _bump(diagnostics, "invalid_usage")
+
+
+def _pi_line(raw, state, diagnostics):
+    try:
+        row = json.loads(raw)
+        msg = row.get("message", {})
+        if msg.get("provider") != "openai-codex" or not msg.get("usage"):
+            return
+        u = msg["usage"]
+        usage = dict(zip(FIELDS, (u.get("input", 0) + u.get("cacheRead", 0) + u.get("cacheWrite", 0), u.get("cacheRead", 0), u.get("cacheWrite", 0), u.get("output", 0), u.get("reasoning", 0))))
+        event = _scan_event(["pi", row.get("id"), row.get("timestamp"), usage], state,
+                            row["timestamp"], usage, model=msg.get("model"), source="Codex via Pi")
+        yield "pi", event
+        _bump(diagnostics, "pi_records")
+    except (AttributeError, KeyError, ValueError, TypeError):
+        _bump(diagnostics, "invalid_pi_lines")
+
+
+def _scan_sources(root, pi_root, include_pi, cache, diagnostics):
+    from .scan_cache import uncached_file
+
+    events = {}
+    codex_files = sorted({p for name in ("sessions", "archived_sessions") for p in (root / name).rglob("*.jsonl")})
+    sources = [("codex", root, codex_files)]
+    if include_pi:
+        sources.append(("pi", pi_root, sorted(pi_root.rglob("*.jsonl"))))
+    scopes = []
+    for kind, source_root, files in sources:
+        scope = digest([kind, str(source_root.absolute())])
+        scopes.append(scope)
+        for path in files:
+            if kind == "codex":
+                diagnostics["session_files"] += 1
+            state = _scan_state(path, kind)
+            file_session = state["session"]
+            parse = _pi_line if kind == "pi" else lambda raw, state, local: _codex_line(raw, state, local, file_session)
+            records = (cache.scan_file(path, scope, kind, state, parse, diagnostics) if cache else
+                       uncached_file(path, kind, state, parse, diagnostics))
+            try:
+                for mode, event in records:
+                    if mode == "gap":
+                        events.setdefault(event["id"], event)
                         continue
-                    identity = ["response", payload["response_id"]] if payload.get("response_id") else ["record", row.get("timestamp"), usage]
-                    session = payload.get("thread_id") or session
-                    diagnostics["modern_records"] += 1
-                elif kind == "event_msg" and payload.get("type") == "token_count":
-                    info = payload.get("info")
-                    if not info:
-                        continue
-                    total = info.get("total_token_usage")
-                    # Older Codex forks replay the parent's counters with new
-                    # timestamps, before the child's first turn_context.
-                    # They are history, not requests billed to the new thread.
-                    if forked and not context_started:
-                        previous = total
-                        diagnostics["inherited_counters"] += 1
-                        continue
-                    if total is not None and total == previous:
-                        diagnostics["repeated_counters"] += 1
-                        continue
-                    if modern_started:
-                        previous = total
-                        continue
-                    usage = info.get("last_token_usage")
-                    # A fork can emit its first context BEFORE replaying the
-                    # parent's cumulative counter. Only its last request belongs
-                    # to this child; the inherited prefix is not a missing gap.
-                    inherited_baseline = forked and previous is None
-                    if inherited_baseline:
-                        diagnostics["inherited_baselines"] += 1
-                    if usage is not None and total and total != previous and not inherited_baseline:
-                        delta = {key: total.get(key, 0) - (previous or {}).get(key, 0) for key in FIELDS}
-                        if all(value >= 0 for value in delta.values()):
-                            residual = {key: delta[key] - usage.get(key, 0) for key in FIELDS}
-                            if all(value >= 0 for value in residual.values()) and (residual["input_tokens"] or residual["output_tokens"]):
-                                recovered = residual
-                    if usage is None and total:
-                        if inherited_baseline:
-                            previous = total
+                    if mode == "codex" and event["id"] in events:
+                        diagnostics["copied_requests"] += 1
+                        if events[event["id"]]["model"] != "unknown":
                             continue
-                        if previous and total.get("input_tokens", 0) < previous.get("input_tokens", 0):
-                            diagnostics["counter_resets"] += 1
-                            usage = total
-                        else:
-                            usage = {key: max(0, total.get(key, 0) - (previous or {}).get(key, 0)) for key in FIELDS}
-                    previous = total
-                    if usage is None:
-                        continue
-                    model = info.get("model") or model
-                    # Copied fork histories retain event timestamps and counters.
-                    # Do not use the new file/session id as request identity.
-                    identity = ["legacy", row.get("timestamp"), usage, total]
-                    diagnostics["legacy_records"] += 1
-                else:
-                    continue
-                try:
-                    event = make_event(identity, session, row["timestamp"], model, usage)
-                except (KeyError, TypeError, ValueError):
-                    diagnostics["invalid_usage"] += 1
-                    continue
-                if recovered:
-                    try:
-                        gap = make_event(["counter-gap", identity], session, row["timestamp"], model, recovered)
-                        # Missing request boundaries can affect long-context rates.
-                        if recovered["input_tokens"] > 272_000:
-                            gap["model"] = "unknown-counter-gap"
-                        events.setdefault(gap["id"], gap)
-                        diagnostics["counter_gap_records"] += 1
-                    except ValueError:
-                        diagnostics["invalid_counter_gaps"] += 1
-                if not event["usage"]["input_tokens"] and not event["usage"]["output_tokens"]:
-                    continue
-                if event["id"] in events:
-                    diagnostics["copied_requests"] += 1
-                    if events[event["id"]]["model"] != "unknown":
-                        continue
-                events[event["id"]] = event
-    # Codex-authenticated requests made through Pi also use the same allowance.
-    pi_root = pi_root if pi_root is not None else Path.home() / ".pi/agent/sessions"
-    for path in sorted(pi_root.rglob("*.jsonl")) if include_pi else ():
-        with path.open(encoding="utf-8") as stream:
-            for line in stream:
-                try:
-                    row = json.loads(line)
-                    msg = row.get("message", {})
-                    if msg.get("provider") != "openai-codex" or not msg.get("usage"):
-                        continue
-                    u = msg["usage"]
-                    usage = dict(zip(FIELDS, (u.get("input", 0) + u.get("cacheRead", 0) + u.get("cacheWrite", 0), u.get("cacheRead", 0), u.get("cacheWrite", 0), u.get("output", 0), u.get("reasoning", 0))))
-                    event = make_event(["pi", row.get("id"), row.get("timestamp"), usage], path.stem,
-                                       row["timestamp"], msg.get("model"), usage, "Codex via Pi")
                     events[event["id"]] = event
-                    diagnostics["pi_records"] += 1
-                except (KeyError, ValueError, TypeError):
-                    diagnostics["invalid_pi_lines"] += 1
+            except FileNotFoundError:
+                diagnostics["scan_missing_files"] += 1
+    if cache:
+        cache.finish(scopes)
+    return events
+
+
+def scan_codex(root: Path | None = None, pi_root: Path | None = None, *, include_pi: bool = True) -> dict:
+    from .scan_cache import CacheUnavailable, ScanCache
+    import sqlite3
+
+    root = root or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    pi_root = pi_root if pi_root is not None else Path.home() / ".pi/agent/sessions"
+    diagnostics = defaultdict(int, scan_bytes_read=0, scan_probe_bytes=0)
+    cache = None
+    try:
+        cache = ScanCache(data_dir())
+        events = _scan_sources(root, pi_root, include_pi, cache, diagnostics)
+    except (CacheUnavailable, sqlite3.Error):
+        if cache:
+            cache.close()
+        # Cache trouble must never hide recorded usage. No exception text (which
+        # might contain a private path) is copied to diagnostics or exports.
+        diagnostics = defaultdict(int, scan_cache_errors=1,
+                                  scan_bytes_read=diagnostics["scan_bytes_read"],
+                                  scan_probe_bytes=diagnostics["scan_probe_bytes"])
+        events = _scan_sources(root, pi_root, include_pi, None, diagnostics)
+    finally:
+        if cache:
+            cache.close()
     from .pricing import CATALOG
     return {"schema": SCHEMA, "exported_at": datetime.now(timezone.utc).isoformat(),
             "pricing_as_of": CATALOG['verified'], "pricing_source": PRICE_SOURCE,

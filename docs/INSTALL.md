@@ -1,17 +1,17 @@
 # Install Splitrail Desktop
 
-Get files only from the [official releases](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases). Native downloads include Python, Qt and the app. No account is needed for local use.
+Get files only from the [official releases](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases). Downloads include their runtime dependencies. The Mac app uses AppKit with a disposable Python worker and contains no Qt libraries. No account is needed for local use.
 
 | Computer | Download | Install and open |
 | --- | --- | --- |
 | Windows 10/11, 64-bit Intel/AMD | `splitrail-desktop-windows-x86_64.zip` | Right-click the ZIP → **Extract All**. Open `Splitrail`, then double-click `Splitrail.exe`. Keep the whole folder together. |
-| Mac with Apple silicon (M1 or newer), macOS 14+ | [splitrail-desktop-macos-arm64.zip (1.2.6)](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.2.6/splitrail-desktop-macos-arm64.zip) | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
+| Mac with Apple silicon (M1 or newer), macOS 14+ | [splitrail-desktop-macos-arm64.zip (1.3.0)](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.3.0/splitrail-desktop-macos-arm64.zip) | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
 | Linux, 64-bit Intel/AMD (Ubuntu 22.04+ or compatible) | `splitrail-desktop-linux-x86_64.tar.gz` | Extract the archive, then run `./Splitrail/Splitrail` from the extracted folder. Keep the whole folder together. |
 | Other supported Python/Qt platforms, including Intel Macs | `splitrail-desktop.pyz` | Use the Python instructions below. Intel macOS and Windows ARM are not native-tested release targets. |
 
 Native apps are unsigned (the Mac bundle has only a local ad-hoc signature), and the Mac app is not notarized. Windows may show **More info → Run anyway**. On macOS, first try opening the app, then use **System Settings → Privacy & Security → Open Anyway** if it is blocked. Only approve the app if it came from the official release and its checksum matches. Do not disable OS security globally.
 
-The Mac build lives in the menu bar and does not appear in the Dock. Close its window to keep private sync and any armed cutoff running; use the menu-bar icon to reopen it or choose **Quit Splitrail**. Hidden windows reduce background work and release dashboard graphics. Weekly quota requires `quota-axi` and banked resets require Codex CLI; GitHub sync requires a signed-in GitHub CLI (`gh`). These optional tools are separate from the app download.
+The native Mac build lives in the menu bar and does not appear in the Dock. Close its window to release its views while keeping configured sync and any armed cutoff running. Right-click the menu-bar icon to quit. Codex CLI supplies quota and reset dates; `quota-axi` is an optional fallback for older CLI versions. GitHub sync uses the existing signed-in GitHub CLI (`gh`). Nothing installs Xcode, Command Line Tools, Node, Python or package managers when the app launches. See [Mac behavior and cutoff scope](MACOS.md).
 
 On Ubuntu/Debian, if Qt reports missing X11 libraries, install `libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1` with your package manager. A graphical desktop is required. The native Linux build needs glibc 2.35 or newer; older distributions should use a compatible Python/Qt installation.
 
@@ -55,6 +55,6 @@ shasum -a 256 splitrail-desktop-macos-arm64.zip
 
 ## First launch, updates and removal
 
-Choose **Use on this device** to track local Codex usage. Other AI tools need the optional [Splitrail collector](https://github.com/Piebald-AI/splitrail#installation). Device sync needs GitHub CLI and an explicitly selected private repository; it is off by default.
+On the native Mac app, local tracking starts immediately. Other builds offer **Use on this device** during setup. Other AI tools need the optional [Splitrail collector](https://github.com/Piebald-AI/splitrail#installation). Device sync needs GitHub CLI and an explicitly selected private repository; it is off by default.
 
 To update, quit the app and extract the new download into a fresh folder (or replace the Mac app). Settings and usage remain in the app's OS-specific data directory. To uninstall, delete the extracted app folder or Mac app. See the [reference guide](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/blob/main/docs/REFERENCE.md) for data locations.

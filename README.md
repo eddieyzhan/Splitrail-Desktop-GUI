@@ -4,13 +4,25 @@
 
 The **Codex usage tracker works on its own**. Tracking other tools requires the separate [Splitrail collector](https://github.com/Piebald-AI/splitrail). GitHub sign-in is only needed if you enable device sync.
 
-[Download for Mac](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/tag/v1.2.6) · [Other downloads](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases) · [Install guide](docs/INSTALL.md) · [Codex quota cutoffs](#codex-weekly-usage-limits-and-reset-protection) · [Connect devices](#sync-usage-between-computers-optional) · [Privacy](PRIVACY.md)
+[Download for Mac](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/tag/v1.3.0) · [Other downloads](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases) · [Install guide](docs/INSTALL.md) · [Native Mac details](docs/MACOS.md) · [Privacy](PRIVACY.md)
 
-**1.2.6** reduces Mac graphics memory and fits the dashboard into a 720 × 440 window. Navigation uses icons; values, percentages and dates replace repetitive headings. Hover or keyboard focus reveals details. Inactive pages load on demand. The menu-bar app keeps private sync and any armed cutoff running when its window is closed.
+**1.3.0 introduces a native AppKit Mac app.** Python and Qt no longer stay running behind the menu-bar icon. Accounting and private GitHub sync run in disposable workers; file notifications replace directory polling. The compact Mac dashboard has regular-weight values, shortened model names, one timestamp, no graph, and only dashboard, Limits and Settings navigation. Windows, Linux and the Python download retain the Qt interface.
+
+## Native Mac app
+
+Open the menu-bar icon for totals, weekly quota and reset dates. Right-click it for Refresh, Keep on screen, or Quit. Closing the window releases its views; the app stays out of the Dock. Daily usage updates are batched after log changes, with no countdown timer or hidden quota polling when the cutoff is off. Existing local data, custom pricing and private GitHub settings carry over.
+
+Settings contains the repository, automatic-sync cadence, receive-only mode, pricing and manual import/export. A signed-in GitHub CLI is required for sync; the app checks repository privacy before every transfer. Local Codex tracking needs no sign-in or collector. Routine quota uses the existing provider's lightweight HTTPS endpoint, with read-only Codex app-server fallback and periodic reset-date reads. `quota-axi` is only an older-CLI fallback.
+
+Mac **Limits requests generation Stop and keeps the chat open**. It requires macOS Accessibility permission and a verified, exposed Codex Stop control before arming. Hidden chats, CLI sessions, other devices and background turns are not protected. A cutoff makes one stop request and displays its outcome; it does not kill an engine, redeem a reset or claim server-confirmed cancellation. See [scope and limitations](docs/TURN_INTERRUPTION.md).
+
+![Native compact Mac dashboard; synthetic data](docs/macos.png)
+
+The rest of this guide describes the Qt interface supplied for Windows, Linux and the Python download. Native Mac scheduling, widgets, build instructions and measurements are documented [separately](docs/MACOS.md).
 
 ![AI token usage dashboard with daily charts and model costs in the Pearl theme; synthetic demo data](docs/pearl.png)
 
-## What you can track
+## What you can track in the Qt interface
 
 | What you want | What you need |
 | --- | --- |
@@ -35,7 +47,7 @@ Choose your platform from the [releases](https://github.com/eddieyzhan/Splitrail
 | macOS 14+, Apple silicon | `splitrail-desktop-macos-arm64.zip` | Unzip, drag `Splitrail.app` to **Applications**, then open it. |
 | Linux, Intel/AMD 64-bit | `splitrail-desktop-linux-x86_64.tar.gz` | Extract, then run `./Splitrail/Splitrail`. Ubuntu 22.04+ or compatible. |
 
-Keep the extracted folder together. These community builds are unsigned and the Mac app is not notarized; the [install guide](docs/INSTALL.md) explains first-open prompts, checksums and Linux libraries. It also provides exact **Python installation commands for all three operating systems** using the small [source-only `.pyz`](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.2.6/splitrail-desktop.pyz), including an Intel Mac option.
+Keep the extracted folder together. These community builds are unsigned and the Mac app is not notarized; the [install guide](docs/INSTALL.md) explains first-open prompts, checksums and Linux libraries. It also provides exact **Python installation commands for all three operating systems** using the small [source-only `.pyz`](https://github.com/eddieyzhan/Splitrail-Desktop-GUI/releases/download/v1.3.0/splitrail-desktop.pyz), including an Intel Mac option.
 
 ### 2. Choose your usage view
 

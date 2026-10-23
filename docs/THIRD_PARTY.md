@@ -1,6 +1,6 @@
 # Native distribution notices
 
-Splitrail Desktop application code is MIT licensed; see LICENSE. Native downloads include unmodified, dynamically loaded Python and Qt libraries. The source-only `.pyz` does not bundle these dependencies.
+Splitrail Desktop application code is MIT licensed; see LICENSE. The native Mac app uses system AppKit and Swift libraries with a disposable worker containing dynamically loaded Python, ijson and psutil. It contains no Qt/PySide/Shiboken libraries. Windows/Linux downloads retain Python and Qt. The source-only `.pyz` does not bundle these dependencies.
 
 - Python: Python Software Foundation license, [source and license](https://www.python.org/downloads/source/).
 - PySide6, Shiboken6 and Qt 6.11.2: LGPLv3/GPL/commercial terms as applicable. This application uses the LGPL option. [Qt for Python licenses](https://doc.qt.io/qtforpython-6/licenses.html), [Qt source archives](https://download.qt.io/archive/qt/6.11/6.11.2/), [PySide/Shiboken source](https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/).

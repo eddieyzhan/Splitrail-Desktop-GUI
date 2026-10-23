@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from splitrail_desktop.portable import (
     SCHEMA, combined_usage, estimate_cost, import_export, make_event,
@@ -31,6 +32,9 @@ class PortableUsageTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.addCleanup(self.temporary.cleanup)
+        cache = patch('splitrail_desktop.portable.data_dir', return_value=self.root / 'cache')
+        cache.start()
+        self.addCleanup(cache.stop)
 
     def scan(self, rows, name="session", archived=False):
         folder = self.root / ("archived_sessions" if archived else "sessions")

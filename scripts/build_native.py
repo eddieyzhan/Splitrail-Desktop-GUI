@@ -25,6 +25,10 @@ def public_tar_metadata(info: tarfile.TarInfo) -> tarfile.TarInfo:
 
 
 def main() -> int:
+    if sys.platform == 'darwin':
+        from build_macos import main as build_macos
+        build_macos()
+        return 0
     build_root = ROOT / 'build' / sys.platform
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm',
                     '--distpath', str(build_root / 'native-dist'),
